@@ -2,7 +2,7 @@
 
 ## 1. 목적, 용어, 구현 상태
 
-기존 AI Agent를 실행할 Container Harness를 만들고, 목표 하드웨어 제약과 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 후속 MVP의 요구사항이며 **현재 구현된 기능 목록이 아니다**. 현재 작업은 문서·구조 작성으로 한정한다.
+기존 AI Agent를 실행할 Container Harness를 만들고, 목표 하드웨어 제약과 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 데이터 계약, 정적 Agent Analyzer, 실행 호스트 Target Profiler, Compatibility Engine이다. Harness 생성·Agent 실행·최적화와 전체 MVP 인수는 아직 구현·검증하지 않았다.
 
 | 용어 | 정의 |
 | --- | --- |
@@ -100,7 +100,7 @@ MVP는 단일 실행 호스트, 로컬 Agent 경로, 명시적인 실행 manifes
 ### FR-10: Hardware Porting Lite
 
 - Agent와 Harness의 아키텍처·OS·ABI·의존성 wheel·가속기·메모리·장치 요구를 목표 프로파일과 비교한다.
-- 항목별로 `compatible/incompatible/unknown`과 근거를 반환한다. 명백한 불일치는 차단 사유, `unknown`은 추가 확인 항목이다.
+- 공통 CompatibilityReport는 `FIT/ADAPT_REQUIRED/UNSUPPORTED/UNKNOWN`과 항목별 근거를 사용한다. 향후 Porting Lite도 이 계약을 사용한다. 명백한 불일치는 차단 사유, `unknown`은 추가 확인 항목이다.
 - 버전·원본·Harness 해시, 목표 프로파일, 호환성 보고서, Dockerfile·실행 manifest·의존성 정보, 체크섬, 준비·검증·롤백 안내를 패키지로 생성한다.
 - 패키지는 실행 준비 자료다. 다른 아키텍처의 이미지 빌드·실행, 에뮬레이션, VM, 장비 배포를 수행하지 않는다. 경고가 있는 패키지에는 실행 적합성 미검증을 표시한다.
 
@@ -116,8 +116,22 @@ MVP는 단일 실행 호스트, 로컬 Agent 경로, 명시적인 실행 manifes
 - 실행 예산·최소 권한·경로 제한·로그 마스킹을 적용한다. 컨테이너가 완전한 보안 격리라는 보장은 하지 않는다.
 - 경계 입력은 Pydantic v2로 검증한다. 알 수 없는 필드, 음수 자원, 잘못된 단위·경로·상태 전이를 거부한다.
 - 제어부는 Python 3.12로 검증한다. 목표 장비의 의존성과 가속기 지원은 프로파일별로 추가 검증한다.
-- 이번 단계에서는 설치 범위 선언과 환경 관찰만 수행한다. Docker 실행, 패키지 빌드, 기능 테스트 완료를 주장하지 않는다.
+- 프로젝트 전용 Python 3.12 환경·uv.lock과 Docker 없이 실행하는 계약·분석 테스트를 제공한다. 단위 테스트 통과는 Docker 실행·Agent 기능 동등성·목표 장비 성능 검증을 뜻하지 않는다.
 
 ## 5. 아직 확정해야 할 입력
 
-첫 기존 Agent 경로·실행 계약·기능 테스트, 목표 하드웨어 프로파일, 벤치마크 데이터·품질 지표·성능 목표, Docker 실행 호스트, 보안 서비스 계약·접속 방식, 코드 변경 승인자와 승인 저장 방식은 후속 착수 시 확정한다. 이 정보가 없어도 문서·구조 준비는 가능하지만 실제 최적화와 MVP 인수 검증은 완료할 수 없다.
+첫 기존 Agent 경로·실행 계약·기능 테스트, 목표 하드웨어 프로파일, 벤치마크 데이터·품질 지표·성능 목표, Docker 실행 호스트, 보안 서비스 계약·접속 방식, 코드 변경 승인자와 승인 저장 방식은 후속 착수 시 확정한다. 이 정보가 없어도 계약·정적 분석·주입된 호스트 관측의 테스트는 가능하지만 실제 최적화와 MVP 인수 검증은 완료할 수 없다.
+
+## 6. 현재 계약·분석 단계
+
+구현된 최상위 계약은 AgentProfile, TargetProfile, HostProfile, OperationalRequirements, HarnessSpecification, CompatibilityReport, BenchmarkResult, AdaptationCandidate, IncubationSession이다. 모두 `schema_version=1.0`, UTC 시각, JSON 왕복 직렬화, 알 수 없는 필드 거절을 제공한다. 식별·참조·해시·명령 등 필수 필드는 누락 시 거절한다. `OperationalRequirements()`의 빈 입력은 모든 요구사항 UNKNOWN을 의미하며 실행 기본값을 추정하지 않는다.
+
+- 각 관측은 `Fact`의 KNOWN/UNKNOWN, 값, 출처, MEASURED/STATIC/DECLARED/SIMULATED/ESTIMATED/UNVERIFIED를 구분한다. UNKNOWN은 null·UNVERIFIED로 표현한다.
+- HostProfile의 확인된 값은 실측이어야 한다. TargetProfile은 목표 선언을 별도로 받으며 RESOURCE_SIMULATION의 제한값을 실제 HardwareInfo에 섞지 않는다. 자원 제한을 적용하거나 GPU·OS·아키텍처를 에뮬레이션하지 않는다.
+- OS·Architecture·ABI, 물리 자원, 런타임, 배포 지원 정보를 독립 구성한다. GPU 존재와 CUDA 실행, Docker 설치·접근·실행은 별도 항목이다. 추정·시뮬레이션으로 실행 지원을 확정할 수 없다.
+- BenchmarkResult는 실제 호스트·목표, Agent/Harness 버전 해시, 실행 ID, 입력·평가 해시, seed·반복·워밍업, 단위·출처·증거별 지표, 기능·품질 검증을 연결한다.
+- AdaptationCandidate는 변경 범위·필드·해시·이유, 근거 실행, 추정 효과, 실제 검증을 분리한다. HARNESS 변경은 그 실험의 기준 Agent 버전을 보존한다. AGENT_CODE 변경의 채택 기록에는 승인·전후 테스트·원복 증거 참조가 필요하다.
+- IncubationSession은 원본 및 파생 버전을 보존하고, 순서 있는 Baseline → Diagnose → Adapt → Validate의 완료 또는 진행 중 반복을 여러 차례 기록한다. 다른 호스트·목표·Agent의 결과 혼입과 순환 버전 이력을 거절한다.
+- ACCEPTED는 실측 실행·지표·기능 PASS·실측 품질 저하 없음·비교 기준 참조를 요구한다. 이는 기록의 유효성 검사이며 최적화 성공을 자동 판정하는 엔진이 아니다.
+
+Compatibility Engine은 알려진 요구사항의 정적 비교만 수행한다. FIT도 실제 실행 보장이 아니며, 의존성 설치·wheel/ABI 호환성은 미검증으로 남긴다. 불일치 또는 미확인 정보를 덮어쓰지 않고 `UNSUPPORTED > UNKNOWN > ADAPT_REQUIRED > FIT` 우선순위로 집계한다. 실제 Agent 입력으로 실행 동등성과 성능을 검증하는 전체 MVP 인수는 후속 단계다.

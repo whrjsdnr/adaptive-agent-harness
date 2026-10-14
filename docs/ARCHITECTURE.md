@@ -2,7 +2,7 @@
 
 ## 1. 설계 수준과 선택
 
-이 문서의 계약·함수·상태는 **후속 구현 설계안**이다. 현재 소스에는 설명용 패키지 파일과 빈 모듈 디렉터리만 있으며, 아래 인터페이스는 구현하지 않았다.
+공통 데이터 계약과 `analyzer`의 AgentAnalyzer·TargetProfiler·CompatibilityEngine은 구현했다. Harness·실행·벤치마크 수집·최적화·Scheduler·보안·Porting Lite·승인·저장은 후속 설계안이다. Incubation 데이터는 기록 스키마이며 실행 엔진이 아니다.
 
 제어부는 Python 3.12 단일 프로세스로 시작한다. Pydantic v2 데이터 계약, 주입 가능한 실행·저장·외부 서비스 어댑터, 로컬 산출물 저장을 사용한다. Docker 실행 백엔드와 도메인 로직을 분리하고, 플랫폼 자체의 웹 서버나 상시 서비스는 우선 만들지 않는다. 후속 CLI는 orchestration을 호출하는 얇은 경계로 설계한다.
 
@@ -33,19 +33,19 @@ flowchart TD
 
 ## 3. 모듈 책임과 제안 인터페이스
 
-아래 표의 타입과 메서드는 계약을 설명하는 표기이며 실행 가능한 API가 아니다.
+아래 표에서 `contracts`와 `analyzer`만 구현된 API다. 나머지 행의 함수는 후속 설계 표기다.
 
 | 모듈 | 책임 | 제안 인터페이스 | 경계 |
 | --- | --- | --- | --- |
 | `contracts` | 버전 있는 입력·출력·상태·오류 모델 | 아래 계약의 Pydantic 모델과 enum | 외부 I/O·최적화 규칙 없음 |
-| `analyzer` | 원본 보존 정적 분석, 실행·목표 프로파일 수집 | `analyze_agent(AgentManifest) -> AgentProfile`; `assess_hardware(HardwareProfile, AgentProfile) -> CompatibilityReport` | Agent import·실행·자동 설치 없음 |
-| `harness` | 기준 Harness·후보 구성을 자료로 생성 | `generate(AgentProfile, HarnessSpec) -> HarnessBundle`; `revise(HarnessBundle, Candidate) -> HarnessBundle` | Docker 실행·Agent 코드 수정 없음 |
+| `analyzer` | 정적 분석, 로컬 호스트 관측, 목표 호환성 | `AgentAnalyzer.analyze(path, agent_id=None, operational_requirements=None) -> AgentProfile`; `TargetProfiler(probe=None).profile_host() -> HostProfile`; `CompatibilityEngine.assess(agent, target) -> CompatibilityReport` | Agent import·실행·자동 설치 없음 |
+| `harness` | 기준 Harness·후보 구성을 자료로 생성 | `generate(AgentProfile, HarnessSpecification) -> HarnessBundle`; `revise(HarnessBundle, AdaptationCandidate) -> HarnessBundle` | Docker 실행·Agent 코드 수정 없음 |
 | `runtime` | Docker 사전 점검, 빌드·실행·정리 | `preflight() -> RuntimeCapability`; `build(HarnessBundle) -> ImageArtifact`; `execute(RunRequest) -> RunResult`; `cancel(run_id) -> CancelResult` | 추정 결과를 실측으로 반환하지 않음 |
 | `benchmark` | 평가 계획, 결과 집계·비교 가능성·채택 기준 평가 | `evaluate(RunResult, BenchmarkPlan) -> BenchmarkResult`; `compare(baseline, candidate, BenchmarkPlan) -> ComparisonResult` | 컨테이너 직접 실행·유형별 처방 없음 |
-| `optimizer` | 실행 증거로 제한된 후보 제안, 예산·중복 관리 | `propose(ExperimentHistory, Objective, SearchBudget) -> list[Candidate]` | 자동 코드 변경·후보 자동 채택 없음 |
+| `optimizer` | 실행 증거로 제한된 후보 제안, 예산·중복 관리 | `propose(ExperimentHistory, Objective, SearchBudget) -> list[AdaptationCandidate]` | 자동 코드 변경·후보 자동 채택 없음 |
 | `scheduler` | 단일 호스트 FIFO·예약·동시성·상태·취소 | `submit(JobSpec) -> JobRef`; `status(job_id) -> JobStatus`; `cancel(job_id) -> CancelResult` | 분산·선점·학습 정책 없음 |
 | `security` | 별도 보안 하부 Agent 요청·응답 어댑터 | `review(SecurityReviewRequest) -> SecurityReviewResult` | 판정 엔진 개발 제외 |
-| `porting` | 목표 호환성 평가와 이식 패키지 생성 | `assess(AgentProfile, HarnessBundle, HardwareProfile) -> CompatibilityReport`; `package(PortingRequest) -> PortingPackage` | 에뮬레이션·VM·장비 배포 없음 |
+| `porting` | 목표 호환성 평가와 이식 패키지 생성 | `assess(AgentProfile, HarnessBundle, TargetProfile) -> CompatibilityReport`; `package(PortingRequest) -> PortingPackage` | 에뮬레이션·VM·장비 배포 없음 |
 | `approvals` | 코드 패치 승인·사본 적용·테스트·원복 증거 연결 | `request(CodeChangeProposal) -> ApprovalRef`; `apply_approved(ApprovalRecord) -> PatchTrial`; `rollback(PatchTrial) -> RollbackResult` | 원본 직접 변경·포괄 승인 없음 |
 | `storage` | ID·해시·JSON 기록·산출물·이력 저장 | `append(Record) -> RecordRef`; `load(RecordRef) -> Record`; `put_artifact(ArtifactInput) -> ArtifactRef` | 채택 판단·Agent 분석 없음 |
 | `orchestration` | 사전 조건, 기준선, 후보 반복, 게이트와 종료 | `incubate(IncubationRequest) -> IncubationReport` | 판단 로직은 해당 모듈에 위임 |
@@ -60,20 +60,20 @@ flowchart TD
 | --- | --- |
 | `AgentManifest` | `agent_id`, 원본 경로·revision·SHA-256, `argv`, `working_dir`, 의존성 파일, 입력·출력, 요구 권한, 기능 테스트 `argv` |
 | `AgentProfile` | 원본 참조, 런타임·의존성·진입점·장치 요구, 항목별 근거·신뢰 수준·unknown |
-| `HardwareProfile` | `profile_id`, `role=target/execution_host`, 아키텍처·OS·ABI, CPU·RAM·저장 공간, 가속기·드라이버·네트워크·장치, 수집 방식 |
-| `HarnessSpec` | Agent 참조, 기반 이미지, 의존성 계획, `argv`, 환경 변수 이름·비밀 참조, 마운트·입출력, 자원·timeout·관측 설정 |
+| `TargetProfile` / `HostProfile` | 목표와 실제 호스트를 분리. PlatformInfo·ResourceCapacity·RuntimeInfo·DeploymentCapabilities 독립 구성; 목표의 RESOURCE_SIMULATION·simulated_limits는 실측 용량과 별도 |
+| `HarnessSpecification` | 구현된 최소 계약: Agent·원본 해시·목표·버전·부모 Harness·실행 방식·argv·이미지 관측·자원 제한·환경 비밀 참조. 파일 생성은 미구현 |
 | `HarnessBundle` | `harness_id`, spec·원본 해시, Dockerfile·manifest·컨텍스트 파일 목록, 산출물 참조·해시 |
 | `RuntimeCapability` | 실제 실행 호스트, Docker CLI·데몬·권한·아키텍처 지원 상태, 차단 원인 |
 | `ImageArtifact` | 이미지 digest, Harness 참조, 빌드 실행 ID·로그·결과 |
 | `RunRequest` | 이미지·Harness·입력·목표와 호스트 참조, 제한·seed·벤치마크·보안 검토 참조 |
 | `RunResult` | `run_id`, 실제 호스트·이미지 digest, 시각, 종료 상태·exit code·timeout·OOM, 로그·원시 지표·오류·정리 결과 |
 | `BenchmarkPlan` | 데이터·평가 해시, 워밍업·반복·seed, 지표·단위·집계법·목표 방향, 최소 개선·품질 한도·변동 판정 규칙 |
-| `BenchmarkResult` | 근거 실행 ID 목록, 개별 관측·집계·분산, 기능·품질 결과, `evidence_kind=measured/simulated/estimated/unverified` |
-| `Candidate` | `candidate_id`, 부모 Harness, 근거 실행 ID·관측, 가설, 변경 필드·diff 해시, 위험·검증 계획·예산, `scope=harness/agent_code` |
+| `BenchmarkResult` | 구현된 실행별 계약: run_id·Agent/ Harness 해시·호스트/목표 스냅샷·입력/평가 해시·seed·반복/워밍업·출처/단위/증거별 지표·기능/품질 검증. 수집·집계 엔진은 미구현 |
+| `AdaptationCandidate` | 구현된 최소 계약: HARNESS/AGENT_CODE, 기준 Agent 버전·부모/결과 Harness·변경 필드/해시·이유·근거 실행·예상 효과·실제 검증·결정·코드 변경 증거. 후보 생성은 미구현 |
 | `ComparisonResult` | 기준·후보 참조, 비교 가능성·개선·품질 판정, `accepted/rejected/inconclusive`, 근거 |
 | `SearchBudget` | 최대 후보 수·총 시간·예약 자원·개선 없음 횟수, 소비 기록과 종료 이유 |
 | `IncubationReport` | 입력·기준·모든 후보·최종 결정 참조, 예산·종료 원인·미검증 항목 |
-| `CompatibilityReport` | 목표·Agent·Harness 참조, 항목별 `compatible/incompatible/unknown`, 근거·필요 확인, 전체 차단 여부 |
+| `CompatibilityReport` | 구현된 Agent·목표 참조, 전체/항목별 FIT/ADAPT_REQUIRED/UNSUPPORTED/UNKNOWN·근거·미확인 항목. 정적 요구사항 적합성만 판정 |
 | `PortingPackage` | 목표와 호환성 보고서, 포함 파일·각 SHA-256, 원본·Harness·이미지 참조, 생성 시각·제약·장비 검증 상태 |
 
 `schema_version`의 major가 다르면 자동 해석하지 않고 명시적 마이그레이션을 요구한다. manifest 경로는 허용된 작업 루트 내부로 정규화하며 symlink·경로 탈출도 검사한다. 비밀 값은 JSON 계약과 로그에 포함하지 않고 참조로 전달한다.
@@ -147,3 +147,22 @@ artifacts/<incubation_id>/
 정적 호환성 분석은 실행 성공과 별개의 증거다. 같은 아키텍처·의존성에서 실행한 결과도 다른 목표 장비의 성능 보장이 아니다. 패키지 생성 성공과 목표 실행 검증 여부를 별도 필드로 기록한다.
 
 패키지에는 목표 프로파일, 호환성 보고서, 생성 Dockerfile·실행 manifest·의존성 자료, 파일 해시, 필요한 드라이버·장치·네트워크 요구, 준비·검증·롤백 안내를 넣는다. 불일치·unknown이 있으면 준비 자료로만 출력하고 실행 가능 표시를 하지 않는다. 비밀·원본 소스의 재배포는 기본 제외하며, 기존 Agent는 해시와 제공 위치로 참조한다. 이미지 교차 빌드·에뮬레이션·VM·실장비 배포는 호출하지 않는다.
+
+## 11. 현재 구현 API와 범위
+
+`contracts/base.py`는 Contract·Fact·EvidenceKind를, `profiles.py`는 Agent·Host·Target·OperationalRequirements·CompatibilityReport와 독립된 플랫폼·런타임·배포 구성요소를, `incubation.py`는 HarnessSpecification·BenchmarkResult·AdaptationCandidate·IncubationSession을 제공한다. 이후 인터페이스에서는 제안 단계의 HardwareProfile·HarnessSpec·Candidate 대신 위 이름을 사용한다. AgentManifest·HarnessBundle·BenchmarkPlan·PortingPackage 등의 나머지 계약은 아직 제안이다.
+
+| API | 동작과 한계 |
+| --- | --- |
+| `AgentAnalyzer.analyze(project, agent_id=None, operational_requirements=None)` | 정적 TOML·requirements include·AST 읽기. Agent import·subprocess·네트워크 없음. UTF-8, 파일 수/크기 한도, symlink·경로 탈출·개인 설정 제외. 오류는 AnalysisError의 code·path로 반환 |
+| `TargetProfiler(probe=None).profile_host()` | LocalHostProbe 또는 주입한 HostProbe 사용. OS·아키텍처·ABI·논리 코어·총 RAM·PCI 그래픽 장치·Python·Docker CLI/로컬 접근 관측. CUDA·VM·미실행 컨테이너 지원은 UNKNOWN |
+| `TargetProfile.simulate_resources(host, limits, name)` | 실제 HostProfile을 보존한 별도 TargetProfile 생성. 제한은 표현만 하며 적용·에뮬레이션 없음 |
+| `CompatibilityEngine.assess(agent, target)` | OS·아키텍처·Python·물리 CPU/RAM·가상 제한·GPU·CUDA·실행 방식·Docker 전제조건 비교. 의존성 설치는 UNKNOWN. 유형별 최적화 정책 없음 |
+
+모든 관측의 UNKNOWN은 null과 이유로 유지한다. 런타임과 배포 기능의 지원 여부에 추정·시뮬레이션 증거를 사용하지 않는다. Docker daemon query는 Unix 소켓에 한정하며 원격 DOCKER_HOST의 결과를 로컬 호스트 능력으로 수집하지 않는다. 정상 데몬 응답은 접근의 증거이며 컨테이너 실행 테스트의 증거는 아니다.
+
+Agent 정적 분석은 설정 선언을 탐지할 뿐 실제 진입점 동작·환경변수 필수성·의존성 설치 가능성을 확인하지 않는다. 선택 의존성·동적 메타데이터·복잡한 pip 옵션·AST 이름의 런타임 재바인딩은 정밀 해석하지 않는다. `AgentSource.content_sha256`은 분석한 파일 목록과 각 해시의 결정적 지문이며 전체 Agent 백업을 대체하지 않는다.
+
+IncubationSession의 iterations는 1부터 연속 번호이며 각 반복은 네 단계의 순서 있는 prefix 또는 완료된 네 단계다. 단계별 payload와 Agent/호스트/목표/원본/파생 버전 참조를 검증한다. 후보의 예상 효과는 ESTIMATED, 실제 검증은 별도 BenchmarkResult다. 품질이 저하되거나 실측이 없는 결과는 ACCEPTED로 기록할 수 없다. 코드 변경 증거는 참조 스키마만 구현했으며 승인·패치 적용·테스트 실행·롤백 실행은 구현하지 않았다.
+
+CompatibilityReport의 FIT는 명시된 정적 요구사항에 대한 판정이며 Agent 실행 성공·보안 허가·성능 보장이 아니다. 다른 알려진 불일치가 있으면 UNSUPPORTED, 그렇지 않고 미확인 항목이 있으면 UNKNOWN, 그다음 조정 가능한 조건이 있으면 ADAPT_REQUIRED다. 실제 호스트 프로파일을 입력 목표에 자동 병합하지 않는다.

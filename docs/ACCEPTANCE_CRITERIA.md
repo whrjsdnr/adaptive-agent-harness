@@ -2,9 +2,9 @@
 
 ## 1. 현재 단계와 MVP 인수의 구분
 
-현재 요청의 완료 범위는 **문서 6개와 기본 프로젝트 구조**다. 아래 MVP 기준은 후속 구현을 위한 검증 계획이며 현재 기능 통과를 뜻하지 않는다. 문서 검증, 라이브러리 기본 호환성 확인, 실제 기능 테스트를 구별한다.
+현재 완료 범위는 독립 개발환경·공통 계약·정적 Agent 분석·실행 호스트 관측·호환성 판정이다. 문서·구조 작성 단계는 이전 기록으로 보존한다. 아래 전체 MVP 기준과 현재 단계 기준을 구별하며, 단위 테스트 통과를 Agent 실행·최적화 완료로 해석하지 않는다.
 
-## 2. 현재 문서·구조 단계의 완료 기준
+## 2. 초기 문서·구조 단계의 완료 기준 (이전 단계)
 
 | ID | 기준 | 필요한 증거 |
 | --- | --- | --- |
@@ -15,11 +15,11 @@
 | S-05 | 비즈니스 로직·CLI·컨테이너 생성 및 실행을 구현하지 않음 | 소스 검토·테스트 수집 결과, 현재 상태와 후속 구현 계획 구분 |
 | S-06 | 변경 파일·주요 결정·실행 검증·다음 작업 보고 | 작업 완료 보고 |
 
-프로젝트 의존성 설치·패키지 빌드·Docker 실측·성능 개선은 현재 완료 조건에 포함하지 않는다. 미실행 명령은 환경 준비 안내로만 기록한다.
+위 조건은 초기 문서·구조 작성 당시의 기준이다. 현재 계약·분석 단계의 기준은 8절에서 별도로 기록한다. Docker 실측·성능 개선은 아직 인수하지 않았다.
 
 ## 3. 후속 MVP 검증 매트릭스
 
-모든 항목은 현재 **미구현·미검증**이다. 자동 테스트와 실제 실행 증거가 필요한 범위를 함께 표시한다.
+전체 MVP는 아직 인수하지 않았다. FR-01·FR-02의 정적 분석·프로파일 관측과 공통 계약을 단위 테스트로 검증했으며, Docker·Agent 실제 실행이 필요한 항목은 미구현·미검증이다.
 
 | 요구사항 | 인수 시나리오 | 통과 기준·증거 |
 | --- | --- | --- |
@@ -59,7 +59,7 @@
 
 Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, 해당 `pytest`를 실행한다. 실측 기능 인수에서는 Docker 사전 점검과 Docker 테스트를 반드시 수행한다. 실패한 필수 테스트가 있으면 완료가 아니며, 0건·skip·xfail·미실행·환경 차단은 그 기능의 통과 증거가 아니다.
 
-현재 빈 테스트 디렉터리의 수집 결과는 0건·exit code 5가 예상된다. 이를 성공으로 바꾸려고 형식적인 테스트나 종료 코드 무시 설정을 추가하지 않는다.
+초기 구조 단계의 테스트 수집은 0건·exit code 5였다. 현재 단계에는 계약·분석 행동 테스트가 있으며, 외부 명령과 소켓 연결을 차단한 상태로 실행한다.
 
 ## 6. 필수 검증 기록
 
@@ -69,7 +69,7 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 
 ## 7. 초기 구조 작성 시 실행한 검증
 
-2026-10-14, `/home/geonug/kdt-linux/adaptive-agent-harness`에서 수행했다. 아래 결과는 현재 문서·구조 단계에만 해당한다.
+2026-10-14, `/home/geonug/kdt-linux/adaptive-agent-harness`에서 수행했다. 아래 결과는 초기 문서·구조 작성 당시의 기록이다. 현재 상태는 8절을 따른다.
 
 | 실행 명령 | 결과 | 의미 |
 | --- | --- | --- |
@@ -83,3 +83,23 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 | `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONDONTWRITEBYTECODE=1 pytest --collect-only -q -p no:cacheprovider` | exit 5, `no tests collected` | 테스트 0건 확인; 기능 검증 통과가 아님 |
 
 소스 AST 검사는 Python 파일이 설명용 `__init__.py` 하나이고 모듈 docstring만 가진다는 점을 확인했다. 실행 가능한 CLI·Dockerfile·기능 테스트는 없다. 프로젝트 가상환경 생성, 의존성 해결·잠금, 패키지 빌드, Docker 실행, 외부 보안 연동, 목표 하드웨어 실측은 수행하지 않았다.
+
+## 8. 공통 계약·분석 단계의 완료 기준과 증거
+
+2026-10-14, 프로젝트 전용 `.venv`의 Python 3.12.14로 검증했다. 설치 버전은 Pydantic 2.14.1, packaging 26.3, pytest 9.1.1, Ruff 0.16.10이며 uv 0.12.8로 잠금 파일을 관리한다.
+
+| 기준 | 검증 |
+| --- | --- |
+| 프로젝트 독립 환경과 의존성 잠금 | uv sync, sys.executable·sys.prefix 경로 확인, uv.lock 포함 |
+| 아홉 모델의 JSON·필수 필드·타입·UTC·스키마 버전 | 모든 모델 왕복, 누락/알 수 없는 필드·자원 오류·UNKNOWN 모순 거절 |
+| Agent 정적 분석 | TOML·requirements·진입점·환경변수 이름·설정 선언, 정상·누락·깨진 입력·symlink·경로 탈출·파일 한도·원본 파일 불변 |
+| Target Profiler | 주입한 프로브로 OS·CPU·RAM·GPU·Docker·Python 정상/실패 관측, GPU/CUDA·데몬 접근/실행의 분리 |
+| 호환성 네 가지 판정 | 플랫폼·런타임·물리 자원·가상 제한·GPU·CUDA·Docker 권한·의존성 미확인 근거 |
+| 향후 Incubation 기록 | 여러 반복, 원본·파생 버전, 예상/검증 분리, 품질 저하·미실측 채택 거절, 코드 변경 승인/테스트/롤백 참조 |
+| 오프라인 테스트 | 테스트 fixture가 외부 명령·소켓 연결을 차단. Docker 실행·외부 네트워크 없이 75개 통과; skip/xfail 없음 |
+
+실행 명령: `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --python /home/geonug/.local/bin/python3.12`, `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked`, `.venv/bin/pytest -q`, `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`. pytest는 75 passed, Ruff는 lint·format 통과다.
+
+`env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv build --offline`로 sdist·wheel을 빌드했다. 소스 배포 파일에 캐시·가상환경·Git 메타데이터·개인 설정·환경 파일이 포함되지 않음을 검사했고, wheel에 구현된 계약·분석 모듈이 포함됨을 확인했다. 패키지 빌드는 컨테이너 Harness 빌드와 별개다. 빌드 시 소스 내부 캐시 경고가 있었으나 실제 sdist 파일 목록에서 제외를 확인했다.
+
+이 결과는 제공된 Agent의 실제 실행·기능 동등성·최적화 성능 검증이 아니다. Docker Harness Builder, Agent 실행·코드 변경, Optimization Planner, Scheduler, Hardware Emulator, 보안 실제 연동, Porting Lite 생성은 미구현이다. 실행을 요구하는 전체 MVP 매트릭스는 여전히 후속 인수 대상이다.
