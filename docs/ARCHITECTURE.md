@@ -2,7 +2,7 @@
 
 ## 1. 설계 수준과 선택
 
-공통 계약·분석과 `harness`의 명세 생성·컨테이너 빌드 컨텍스트 패키징을 구현했다. 실제 이미지 빌드·실행·벤치마크·최적화·Scheduler·보안 실제 연동·Porting Lite 전체 기능·승인·이력 저장은 후속 설계안이다. Incubation 데이터는 기록 스키마이며 실행 엔진이 아니다.
+공통 계약·분석·Harness 패키징과 Phase 4 Docker 실행 어댑터·Baseline Runner·결과 저장을 구현했다. 저장소 reference fixture로 WSL2 Linux의 실제 Docker 통합 테스트 8개를 통과했다. 사용자 Agent·목표 장비 검증과 최적화·Scheduler·보안 실제 연동·Porting Lite 전체 기능·Agent 코드 변경 승인은 후속 범위다. Incubation 데이터는 기록 스키마이며 최적화 엔진이 아니다.
 
 제어부는 Python 3.12 단일 프로세스로 시작한다. Pydantic v2 데이터 계약, 주입 가능한 실행·저장·외부 서비스 어댑터, 로컬 산출물 저장을 사용한다. Docker 실행 백엔드와 도메인 로직을 분리하고, 플랫폼 자체의 웹 서버나 상시 서비스는 우선 만들지 않는다. 후속 CLI는 orchestration을 호출하는 얇은 경계로 설계한다.
 
@@ -33,7 +33,7 @@ flowchart TD
 
 ## 3. 모듈 책임과 제안 인터페이스
 
-아래 표에서 contracts·analyzer·harness만 구현된 API다. 나머지 함수는 후속 설계 표기다. 저장소 쓰기는 Builder의 파일 어댑터 경계에 한정하고 명세 생성기는 입력 데이터만 비교한다.
+아래 표는 전체 MVP 인터페이스 제안이다. contracts·analyzer·harness와 아래 13절의 Phase 4 API가 구현되었다. 나머지 함수는 후속 설계 표기다. 파일 쓰기는 Builder와 JsonResultStore 어댑터에서 수행하며 명세 생성과 benchmark 판단은 외부 I/O를 하지 않는다.
 
 | 모듈 | 책임 | 제안 인터페이스 | 경계 |
 | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ flowchart TD
 | `RunRequest` | 이미지·Harness·입력·목표와 호스트 참조, 제한·seed·벤치마크·보안 검토 참조 |
 | `RunResult` | `run_id`, 실제 호스트·이미지 digest, 시각, 종료 상태·exit code·timeout·OOM, 로그·원시 지표·오류·정리 결과 |
 | `BenchmarkPlan` | 데이터·평가 해시, 워밍업·반복·seed, 지표·단위·집계법·목표 방향, 최소 개선·품질 한도·변동 판정 규칙 |
-| `BenchmarkResult` | 구현된 실행별 계약: run_id·Agent/ Harness 해시·호스트/목표 스냅샷·입력/평가 해시·seed·반복/워밍업·출처/단위/증거별 지표·기능/품질 검증. 수집·집계 엔진은 미구현 |
+| `BenchmarkResult` | 실행별 Agent/Harness/Host/Target·실험 조건·지표·기능 검증 계약. Phase 4에서 실행별 생성하며 비교·최적화 집계는 미구현 |
 | `AdaptationCandidate` | 구현된 최소 계약: HARNESS/AGENT_CODE, 기준 Agent 버전·부모/결과 Harness·변경 필드/해시·이유·근거 실행·예상 효과·실제 검증·결정·코드 변경 증거. 후보 생성은 미구현 |
 | `ComparisonResult` | 기준·후보 참조, 비교 가능성·개선·품질 판정, `accepted/rejected/inconclusive`, 근거 |
 | `SearchBudget` | 최대 후보 수·총 시간·예약 자원·개선 없음 횟수, 소비 기록과 종료 이유 |
@@ -124,7 +124,7 @@ evaluating -> proposing | completed | inconclusive
 
 ## 9. 산출물·오류·재현성
 
-후속 산출물 레이아웃 제안은 다음과 같다. 지금은 `artifacts/.gitkeep`만 생성한다.
+후속 전체 MVP 산출물 레이아웃 제안은 다음과 같다. Phase 4는 지정한 별도 디렉터리에 실행 UUID별 JSON을 저장한다.
 
 ```text
 artifacts/<incubation_id>/
@@ -186,6 +186,17 @@ CompatibilityReport의 FIT는 명시된 정적 요구사항에 대한 판정이�
 
 출력 파일과 manifest는 고정 이름을 사용하고, 소스는 검증된 상대 경로를 `agent/` 아래로 복사한다. 출력 루트는 기존 POSIX 디렉터리이며 child 디렉터리는 새로 생성한다. 경로 검사와 O_NOFOLLOW·O_EXCL·dir_fd로 symlink·기존 파일 쓰기를 차단한다. bind는 패키징 호스트에서 소켓·symlink·존재를 확인하고 실제 실행 호스트에서 다시 확인해야 한다.
 
-환경변수는 이름과 secret:// 또는 env:// locator만 표현하고 외부 공급은 후속 실행 경계 책임이다. 셸·inline Python 입력은 지원하지 않으며 Compose에서 인자의 $는 리터럴로 escape한다. installer는 명시적 전략에서만 고정 exec-form으로 생성한다. 설치 build hook은 나중에 실제 이미지 빌드 시 별도 검토해야 한다.
+패키지 환경변수는 이름과 secret:// 또는 env:// locator만 표현한다. Phase 4 호출자가 참조별 값을 메모리로 공급한다. 셸·inline Python 입력은 지원하지 않으며 installer build hook은 패키지 실행 승인 시 검토해야 한다.
 
-Compose의 deny 설정과 allowlist 선언을 분리하고 선택적 egress 강제 도구는 구현하지 않는다. rootfs read_only는 호환성 확인값에 따라 적용한다. 이미지·컨테이너·외부 보안 검토는 수행하지 않으므로 모든 패키지는 pending-validation profile과 false 실행 플래그를 가진다. Manifest 체크섬은 서명이 아니며 신뢰된 Manifest와 비교해야 한다. 이후 Runner/Porting Lite가 입력 지문·플랫폼·미확인 항목·검증 결과를 별도 기록할 수 있도록 인터페이스를 유지한다.
+Compose의 deny 설정과 allowlist 선언을 분리하며 선택적 egress 강제 도구는 구현하지 않는다. rootfs read_only는 호환성 확인에 따라 적용한다. 패키지는 실행 증거를 포함하지 않으므로 pending-validation profile과 false 플래그를 유지한다. Phase 4는 원본 패키지를 수정하지 않고 실행 증거를 따로 저장한다. Manifest 체크섬은 서명이 아니며 승인된 해시와 대조해야 한다.
+
+## 13. Phase 4 구현 인터페이스
+
+- `contracts/runtime.py`: ExecutionApproval, BaselinePlan, RuntimeRecord, BaselineResult. 기존 BenchmarkResult v1.0과 Phase 3 명세 v1.1은 변경하지 않는다.
+- `orchestration.baseline.integrate`: manifest·승인 해시·입력 지문·실행 조건·환경 바인딩을 확인한다.
+- `BaselineRunner(runtime: Runtime, store: ResultStore).run(...)`: 승인된 사본, 빌드·실행·정리·반복·실패 보존을 조정한다. runtime과 storage는 Protocol로 주입한다.
+- `runtime.docker.DockerCLI`: 로컬 Unix Docker Engine을 제어하는 신뢰된 호스트 어댑터. subprocess 목록 인자·cwd·timeout·프로세스 그룹 종료·양쪽 pipe 크기 제한을 적용한다.
+- `benchmark.baseline.evaluate`: I/O 없이 RuntimeRecord를 기존 BenchmarkResult로 변환하고 명시적 기대 stdout을 평가한다.
+- `storage.baseline.JsonResultStore.save`: 실행 UUID별 결과·계획·승인을 원자적·비덮어쓰기 JSON으로 저장한다.
+
+Package의 false 실행 플래그는 정적 산출물의 상태이며 실제 실행 기록과 별개다. Phase 4 결과는 원본·Harness 버전·소스 bundle·manifest·명세·이미지·실행·승인 ID를 연결한다. 자세한 API·측정 정의·검증 범위와 한계는 [실행 안내](PHASE4_BASELINE.md)를 따른다.

@@ -2,7 +2,7 @@
 
 기존 AI Agent와 목표 하드웨어 프로파일을 분석하여 적합한 Container Harness를 생성하고, 실제 실행과 벤치마크를 반복해 Agent별 최적화 구성을 탐색하는 적응형 부화장 플랫폼이다.
 
-**현재 상태: Phase 3의 Harness 명세·Container Package 생성까지 구현했다.** Python 3.12 환경·uv.lock, 공통 계약, 정적 분석과 컨테이너 빌드 컨텍스트 생성 API를 제공한다. Dockerfile·Compose·명세·환경 템플릿·안내문·Manifest를 생성하며, 이미지 빌드·Agent 실행·자동 최적화·Scheduler·Hardware Emulator·보안 실제 연동은 구현하지 않았다. 플랫폼 CLI·서버는 없다.
+**현재 상태: Phase 4 Baseline Runner 구현, reference fixture의 실제 Docker 통합 테스트 8개 통과.** 기존 계약·분석·Harness 패키징을 유지하며 승인된 패키지의 Docker 빌드·실행·관측·BenchmarkResult JSON 저장 API를 추가했다. WSL2 Linux에서 정상 3회 반복, CPU/RAM 제한, nonzero·timeout·OOM 및 정리를 검증했다. 사용자 Agent·목표 장비와 전체 MVP 인수는 별도다. 자동 최적화·Scheduler·Hardware Emulator·보안 실제 연동·플랫폼 CLI·서버는 없다. [Phase 4 실행 안내](docs/PHASE4_BASELINE.md)를 따른다.
 
 ## 목표와 범위
 
@@ -56,7 +56,7 @@ Harness를 먼저 개선하고, Agent 코드 변경은 명시적 승인·테스�
 └── artifacts/
 ```
 
-나머지 예약 디렉터리와 기존 `.gitkeep`은 유지한다. `artifacts/`는 후속 실행 산출물 위치다. 테스트용 작은 소스 fixture는 정적 분석 검증용이며, 플랫폼이 Agent를 생성하는 기능은 없다.
+나머지 예약 디렉터리와 기존 `.gitkeep`은 유지한다. `artifacts/`는 Git에서 제외하는 실행 산출물 위치다. `tests/fixtures/reference_agent`는 실행 파이프라인 검증용이며 사용자 Agent 인수를 대체하지 않는다. 플랫폼이 Agent를 생성하는 기능은 없다.
 
 ## 확인한 환경과 기술 선택
 
@@ -68,10 +68,10 @@ Harness를 먼저 개선하고, Agent 코드 변경은 명시적 승인·테스�
 | Python | `.venv/bin/python`, 3.12.14 | 다른 프로젝트 가상환경 사용 없음 |
 | Pydantic | 2.14.1 | JSON·경계 검증 테스트 통과 |
 | packaging | 26.3 | PEP 508 의존성·Python 버전 제약 파싱 |
-| pytest | 9.1.1 | 기존 75개 포함 총 147개 통과 |
+| pytest | 9.1.1 | Docker 포함 전체 190개 통과; 실패·skip 없음 |
 | Ruff | 0.16.10 | lint·format 검사 통과 |
 | uv | 0.12.8 | 의존성 설치·잠금 관리 |
-| Docker | CLI 없음 | 이번 테스트는 Docker 불필요; 실제 컨테이너 실행 미검증 |
+| Docker | CLI/Engine 29.1.3, Compose 2.40.3, cgroup v2 | docker 그룹 적용 후 hello-world 및 reference fixture 통합 테스트 8개 통과 |
 | Git | `main`, `origin/main` | GitHub 연결 완료 |
 
 `pyproject.toml`은 허용 버전 범위, `uv.lock`은 해결된 버전을 관리한다. 호환성 검증은 위 설치 버전에 해당하며 전체 허용 범위를 검증한 것은 아니다. 빌드 백엔드는 Hatchling이다.
@@ -91,7 +91,7 @@ env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked --python 3.12
 .venv/bin/pytest -q
 ```
 
-`uv sync --locked`는 잠금 파일을 변경하지 않고 프로젝트 `.venv`를 구성한다. 캐시가 충분하면 `--offline`을 추가할 수 있다. 현재 테스트는 소켓 연결과 외부 명령 실행을 차단하고, Docker 프로브는 가짜 어댑터로 검증한다. 플랫폼 실행 CLI는 아직 없다.
+`uv sync --locked`는 잠금 파일을 변경하지 않고 프로젝트 `.venv`를 구성한다. 캐시가 충분하면 `--offline`을 추가할 수 있다. 단위 테스트는 외부 명령과 소켓 연결을 차단한다. 실제 통합 테스트는 `.venv/bin/pytest --run-docker -q tests/integration`으로 명시적으로 허용하며 Docker 접근 실패는 오류로 보고한다. 플랫폼 실행 CLI는 아직 없다.
 
 ## Python API 사용
 
@@ -161,6 +161,6 @@ Manifest는 명세·소스 번들·각 파일의 해시와 권한을 기록한�
 
 로컬 예시는 `artifacts/phase3-arm64-example/`에 생성했다. 기존 단위 테스트의 fixture를 입력으로 사용했고, 실행하면 의도적으로 예외가 발생하는 테스트용 코드다. 실제 AI Agent 배포 예제가 아니다. 실제 패키징 호스트는 x86_64이고 ARM64 목표는 선언이며, 기반 이미지 아키텍처·런타임은 UNKNOWN이다. 상태는 REVIEW_REQUIRED, image_built·execution_verified는 false다. 이 산출물은 Git에서 제외한다.
 
-모든 생성 Compose 서비스는 `pending-validation` profile을 사용한다. STATIC_READY도 알려진 정적 입력의 완전성만 뜻하며 실행·보안 승인·성능 보장이 아니다. Docker/Compose 구문 검증·이미지 빌드·ARM64 실제 실행·GPU 드라이버/CUDA/TensorRT·기능 동등성은 후속 Baseline Runner에서 검증해야 한다.
+모든 생성 Compose 서비스는 `pending-validation` profile을 사용한다. STATIC_READY는 정적 입력의 완전성만 뜻하며 실행·보안 승인·성능 보장이 아니다. Phase 4 Runner는 Compose를 실행하지 않고 검증된 패키지를 Docker CLI로 빌드한다. ARM64 실장비·GPU 드라이버/CUDA/TensorRT·실제 사용자 Agent 기능 동등성은 미검증이다.
 
 참고: [Compose 설정](https://docs.docker.com/reference/compose-file/services/), [Dockerfile](https://docs.docker.com/reference/dockerfile/), [멀티플랫폼 빌드](https://docs.docker.com/build/building/multi-platform/).

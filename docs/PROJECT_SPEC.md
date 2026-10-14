@@ -2,7 +2,7 @@
 
 ## 1. 목적, 용어, 구현 상태
 
-기존 AI Agent를 실행할 Container Harness를 만들고, 목표 하드웨어 제약과 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석과 Harness Specification·Container Package 파일 생성이다. 이미지 빌드·Agent 실행·자동 최적화와 전체 MVP 인수는 아직 구현·검증하지 않았다.
+기존 AI Agent를 실행할 Container Harness를 만들고 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석·Harness 패키징 및 Phase 4 Docker Baseline Runner다. 저장소 reference fixture의 실제 Docker 통합 테스트 8개를 WSL2 Linux에서 통과했다. 사용자 Agent·목표 장비 검증, 자동 최적화와 전체 MVP 인수는 미완료다.
 
 | 용어 | 정의 |
 | --- | --- |
@@ -148,4 +148,10 @@ Compatibility Engine은 알려진 요구사항의 정적 비교만 수행한다.
 - ContainerHarnessBuilder는 지정된 기존 출력 루트의 새 패키지 디렉터리에만 파일을 쓴다. 기존 출력은 덮어쓰지 않고 실패 시 이번에 작성한 파일만 정리한다. 환경변수 값·자격 증명은 생성하지 않으며 소스·메타데이터의 의심 패턴도 차단한다. 전체 보안 판정 엔진은 구현하지 않는다.
 - Linux x86_64/ARM64의 목표 플랫폼 메타데이터와 미실행 BuildxPlan을 제공한다. 실제 기반 이미지 조회·빌드·교차 실행·ARM64 하드웨어 검증·GPU 디바이스 구성·드라이버/CUDA/TensorRT·바이너리 ABI 검증은 하지 않는다.
 
-출력은 Dockerfile·compose.yaml·harness.yaml·환경 템플릿·안내문·Manifest·선택한 소스의 컨테이너 빌드 컨텍스트다. 미리 빌드된 이미지가 아니며, 현재 image_built와 execution_verified는 항상 false다. STATIC_READY는 정적 입력의 완전성이고 UNKNOWN/ADAPT_REQUIRED 패키지는 실행 검토 전 자료다. 실제 Agent 실행·코드 변경·Optimization Planner·Scheduler·Hardware Emulator는 이번 범위 밖이다.
+Phase 3 출력은 Dockerfile·Compose·명세·환경 템플릿·안내문·Manifest·소스 빌드 컨텍스트다. 패키지의 image_built와 execution_verified는 false로 보존하며 Phase 4 실행 증거는 별도 결과에 기록한다. STATIC_READY는 정적 입력의 완전성이다.
+
+## 8. Phase 4: Agent Integration 및 Baseline Runner
+
+승인된 소스·패키지 해시, Analyzer/Host/Target 지문, 명시적 명령·의존성·작업 디렉터리·환경 참조·CPU/RAM 제한을 확인한다. 패키지 사본을 재검증한 뒤 Docker에서만 빌드·실행한다. 외부 보안 서비스 대신 사용자가 선택한 TRUSTED_LOCAL_TRIAL만 지원하며 이를 보안 승인으로 기록하지 않는다.
+
+BaselinePlan은 반복·워밍업·timeout·로그 한도·기대 stdout을 지정한다. 기대 결과가 없으면 기능 UNKNOWN이며 exit 0만으로 PASS가 되지 않는다. 실패·OOM·timeout·정리 오류를 보존하고 기존 BenchmarkResult를 BaselineResult에 포함해 원자적으로 저장한다. 측정 기준과 한계는 [실행 안내](PHASE4_BASELINE.md)를 따른다. 최적화·자동 변경·Scheduler·코드 수정·에뮬레이션·드론 배포는 구현하지 않는다.

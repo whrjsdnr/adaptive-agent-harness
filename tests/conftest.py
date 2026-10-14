@@ -39,13 +39,28 @@ SOURCE_HASH = "a" * 64
 
 
 @pytest.fixture(autouse=True)
-def offline_only(monkeypatch):
+def offline_only(monkeypatch, request):
+    if request.node.get_closest_marker("docker"):
+        if not request.config.getoption("--run-docker"):
+            pytest.skip("Docker integration requires explicit --run-docker authorization")
+        return
+
     def blocked(*args, **kwargs):
         pytest.fail("Tests must not invoke external commands or network connections")
 
     monkeypatch.setattr(subprocess, "run", blocked)
+    monkeypatch.setattr(subprocess, "Popen", blocked)
     monkeypatch.setattr(socket.socket, "connect", blocked)
     monkeypatch.setattr(socket, "create_connection", blocked)
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-docker",
+        action="store_true",
+        default=False,
+        help="Authorize real builds/execution of repository reference fixtures",
+    )
 
 
 def measured(value):

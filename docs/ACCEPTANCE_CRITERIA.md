@@ -2,7 +2,7 @@
 
 ## 1. 현재 단계와 MVP 인수의 구분
 
-현재 완료 범위는 독립 개발환경·공통 계약·정적 분석과 Phase 3 명세·컨테이너 패키지 파일 생성이다. 이미지 빌드·Agent 실행·전체 MVP 인수는 아직 완료하지 않았다. 문서·구조 작성 단계는 이전 기록으로 보존한다. 아래 전체 MVP 기준과 현재 단계 기준을 구별하며, 단위 테스트 통과를 Agent 실행·최적화 완료로 해석하지 않는다.
+Phase 3까지의 계약·분석·패키징 인수를 유지한다. Phase 4 reference fixture의 실제 Docker 통합 테스트 8개를 WSL2 Linux에서 통과했다. 아래 이전 기록과 10절의 환경 차단, 11절의 실제 검증을 구분한다. fixture 인수는 사용자 Agent·목표 장비·전체 MVP 인수 증거가 아니다.
 
 ## 2. 초기 문서·구조 단계의 완료 기준 (이전 단계)
 
@@ -15,11 +15,11 @@
 | S-05 | 비즈니스 로직·CLI·컨테이너 생성 및 실행을 구현하지 않음 | 소스 검토·테스트 수집 결과, 현재 상태와 후속 구현 계획 구분 |
 | S-06 | 변경 파일·주요 결정·실행 검증·다음 작업 보고 | 작업 완료 보고 |
 
-위 조건은 초기 문서·구조 작성 당시의 기준이다. 현재 계약·분석 단계의 기준은 8절에서 별도로 기록한다. Docker 실측·성능 개선은 아직 인수하지 않았다.
+위 조건은 초기 문서·구조 작성 당시의 기준이다. 계약·분석 단계의 기준은 8절, reference fixture의 Docker 실측은 11절에 기록한다. 후보 비교·성능 개선은 아직 인수하지 않았다.
 
 ## 3. 후속 MVP 검증 매트릭스
 
-전체 MVP는 아직 인수하지 않았다. FR-01·FR-02의 정적 분석·프로파일 관측과 공통 계약을 단위 테스트로 검증했으며, Docker·Agent 실제 실행이 필요한 항목은 미구현·미검증이다.
+전체 MVP는 아직 인수하지 않았다. 공통 계약·정적 분석·Harness·Baseline Runner는 단위 검증을 제공하며 reference fixture의 실제 Docker 실행을 확인했다. 아래 매트릭스의 사용자 Agent·목표 장비·최적화 등 후속 항목은 별도 인수가 필요하다.
 
 | 요구사항 | 인수 시나리오 | 통과 기준·증거 |
 | --- | --- | --- |
@@ -59,7 +59,7 @@
 
 Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, 해당 `pytest`를 실행한다. 실측 기능 인수에서는 Docker 사전 점검과 Docker 테스트를 반드시 수행한다. 실패한 필수 테스트가 있으면 완료가 아니며, 0건·skip·xfail·미실행·환경 차단은 그 기능의 통과 증거가 아니다.
 
-초기 구조 단계의 테스트 수집은 0건·exit code 5였다. 현재 단계에는 계약·분석 행동 테스트가 있으며, 외부 명령과 소켓 연결을 차단한 상태로 실행한다.
+초기 구조 단계는 테스트 0건·exit 5였다. 현재 단위 테스트는 외부 명령·소켓 연결을 차단하며 Docker 통합 테스트는 명시적 opt-in으로 별도 수행한다.
 
 ## 6. 필수 검증 기록
 
@@ -69,7 +69,7 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 
 ## 7. 초기 구조 작성 시 실행한 검증
 
-2026-10-14, `/home/geonug/kdt-linux/adaptive-agent-harness`에서 수행했다. 아래 결과는 초기 문서·구조 작성 당시의 기록이다. 현재 상태는 8절을 따른다.
+2026-10-14, `/home/geonug/kdt-linux/adaptive-agent-harness`에서 수행했다. 아래 결과는 초기 문서·구조 작성 당시의 기록이다. 현재 상태는 8~11절을 따른다.
 
 | 실행 명령 | 결과 | 의미 |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 
 `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv build --offline`로 sdist·wheel을 빌드했다. 소스 배포 파일에 캐시·가상환경·Git 메타데이터·개인 설정·환경 파일이 포함되지 않음을 검사했고, wheel에 구현된 계약·분석 모듈이 포함됨을 확인했다. 패키지 빌드는 컨테이너 Harness 빌드와 별개다. 빌드 시 소스 내부 캐시 경고가 있었으나 실제 sdist 파일 목록에서 제외를 확인했다.
 
-위 기록은 Phase 2 당시 결과다. 현재 Harness 파일 생성·패키징은 9절에서 검증한다. Agent 실제 실행·코드 변경·Optimization Planner·Scheduler·Hardware Emulator·보안 실제 연동·Porting Lite 전체 기능은 미구현이다. 실행을 요구하는 전체 MVP 매트릭스는 여전히 후속 인수 대상이다.
+위 기록은 Phase 2 당시 결과다. Phase 3 패키징은 9절, Phase 4 실행 어댑터와 검증 상태는 10~11절을 따른다. 코드 변경·최적화·Scheduler·Hardware Emulator·보안 실제 연동·Porting Lite 전체 기능은 미구현이다.
 
 ## 9. Phase 3 완료 기준과 검증 증거
 
@@ -122,3 +122,84 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 실행 명령은 `.venv/bin/pytest -q`, `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `git diff --check`이며 최종 완료 보고에 결과를 남긴다. 단위 테스트에서는 subprocess 및 외부 socket 연결을 차단한다. 성공한 기존 fixture를 입력으로 실제 파일 예시 `artifacts/phase3-arm64-example/`를 생성하고 `ContainerHarnessBuilder.verify()`로 검증했다.
 
 예시는 실제 AI Agent가 아니며 테스트 코드가 실행되면 의도적으로 예외를 발생시킨다. ARM64 목표는 선언, 패키징 호스트는 실제 x86_64 관측이며 상태는 REVIEW_REQUIRED다. image_built=false, execution_verified=false, security_review=UNVERIFIED다. Docker/Compose CLI의 구문 검증·실제 이미지 빌드·Agent 실행·ARM64 실장비·CUDA/TensorRT·성능/기능 동등성은 미실행으로 남긴다. 패키지는 Git에서 제외하며 이를 전체 MVP 완료로 보고하지 않는다.
+
+## 10. Phase 4 구현 및 환경 차단 기록
+
+이 절은 Docker 그룹 권한을 복구하기 전의 기록이다. 현재 검증과 인수 범위는 11절을 따른다. 당시 실패 기록과 산출물은 덮어쓰지 않았다.
+
+2026-10-14, 프로젝트 `.venv` Python 3.12.14에서 확인했다. 기준 브랜치 main과 원격 main은 모두 `b79f8b3d9d7c2f524755443fa8d7d5d7be953d30`이며 시작 작업 트리는 깨끗했다. Phase 1~3 계약과 147개 기존 테스트를 유지했다. 새 런타임 의존성을 추가하지 않아 기존 uv.lock을 유지한다. Pydantic 2.14.1, packaging 26.3, pytest 9.1.1, Ruff 0.16.10을 설치 확인했다.
+
+| 실행 명령 / 확인 | 결과 | 판정 |
+| --- | --- | --- |
+| `git status --short`, `git log -5 --oneline`, `git ls-remote origin refs/heads/main` | main·원격 커밋 일치. 원격 조회는 네트워크 권한 확장 후 성공 | Git 기준 확인 |
+| `docker version` | CLI 29.1.3, API 1.52; Engine socket permission denied | Engine 접근 차단 |
+| `docker compose version` | 2.40.3+ds1-0ubuntu1~24.04.1 | CLI 확인 |
+| 사용자 제공 CPU 2코어/RAM 1GiB/python:3.12-slim 실행 정보 재검증 | Docker 접근 거부로 run 단계에 도달하지 못함 | 이번 세션 미검증 |
+| 변경 전 `.venv/bin/pytest -q` | sandbox 146 passed/1 failed(Unix socket bind 금지); 권한 확장 147 passed | 기존 테스트 정상, 환경 제한 구분 |
+| `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked --offline` | exit 0; 13 packages resolved, 12 packages checked | 프로젝트 환경·잠금 검증 |
+| 변경 후 `.venv/bin/pytest -q` (권한 확장) | 182 passed, 8 skipped, exit 0 | 기존 147 + 신규 단위 35 통과; 기본 미허용 Docker 8 skip |
+| `.venv/bin/pytest --run-docker -q tests/integration --maxfail=1` (권한 확장) | 1 setup error, exit 1; `docker info` permission denied | 실제 통합 검증 차단. 나머지 7개 미실행 |
+| `.venv/bin/ruff check .` | All checks passed, exit 0 | lint 통과 |
+| `.venv/bin/ruff format --check .` | 36 files already formatted, exit 0 | format 통과 |
+| `git diff --check` | exit 0 | 공백 검사 통과 |
+
+실행 파이프라인의 환경 실패도 JSON으로 보존했다. 최신 기록은 로컬 Git 제외 경로 `artifacts/phase4-environment-check-c38b8c02-cb7b-4437-9ddd-d850a7cf3d79/61a59610-7b58-4bf1-a709-bcd0b1fb53e3.json`이며 SHA-256은 `fbbfbbb88e4ec1416f059e8746fc0ece94bca386245d491cc6135f168f07c000`이다. execution_evidence=UNVERIFIED, functional_validation=UNKNOWN, error_code=DOCKER_COMMAND_FAILED이며 wall-clock·CPU·메모리·Peak는 모두 null이다. **실제 Baseline 측정 성공 결과는 없다.** 이전 환경 점검 기록은 덮어쓰지 않고 같은 로컬 디렉터리에 보존했다.
+
+원본 fixture 분석 해시는 `cf126d954d096bef7855c612f469741dfd2850b6cd758a843ac6f0ec83738a8b`, 소스 bundle 해시는 `93db58e05c7b48f4278c1717e02f0909f1d75d26ca4bc0157345ca3a28bf79fd`, 명세 해시는 `d3febad66e0e1e6d095d092e805d19a0e078be178da3b0320ab8c966de03b21a`다. 이미지 ID·실제 시작/종료 시각·컨테이너 종료/정리 증거는 생성되지 않았다.
+
+변경 파일은 다음과 같다.
+
+- `src/adaptive_agent_harness/contracts/runtime.py`
+- `src/adaptive_agent_harness/runtime/docker.py`
+- `src/adaptive_agent_harness/orchestration/baseline.py`
+- `src/adaptive_agent_harness/benchmark/baseline.py`
+- `src/adaptive_agent_harness/storage/baseline.py`
+- `tests/conftest.py`
+- `tests/unit/test_baseline_runner.py`
+- `tests/integration/test_docker_baseline.py`
+- `tests/fixtures/reference_agent/app.py`
+- `AGENTS.md`, `README.md`
+- `docs/PROJECT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`, `docs/PHASE4_BASELINE.md`
+
+신규 단위 검증은 패키지/승인 변조 거절, 빌드·create·start·wait 실패 보존, timeout·OOM·nonzero 분리, 제한·네트워크·권한 inspect 대조, stdout/stderr 크기 제한, attach 시작·종료 및 subprocess 종료 처리, 기능 UNKNOWN/FAIL, JSON 왕복·비덮어쓰기·버전 추적, 반복/워밍업, telemetry 누락, 정리 실패 중단을 포함한다. fake runtime 결과는 코드 경계 테스트이며 실측 증거로 사용하지 않는다.
+
+실제 Docker build·정상 실행 3회·CPU/RAM cgroup·권한/네트워크·오류·timeout 강제 종료·OOM·실측 telemetry·cleanup은 통합 테스트를 준비했으나 미검증이다. Compose 서비스 실행, 실사용 Agent, 목표 장비, 실제 메모리 lifetime peak, 별도 기능 검증 명령, 외부 보안 서비스, crash 복구, 통계 비교·최적화·자동 변경·Scheduler·에뮬레이션·드론 배포는 미구현 또는 미검증이다. 자세한 경계와 CPU/메모리 정의는 [Phase 4 안내](PHASE4_BASELINE.md)를 따른다.
+
+테스트 성공 후 커밋·일반 push라는 사용자 조건은 실제 통합 검증 실패로 충족되지 않았다. 변경사항을 작업 트리에 보존하며 커밋·push는 수행하지 않았다. Docker 접근 복구 후 통합 테스트와 전체 회귀를 통과시키고 커밋·origin/main 일반 push를 진행해야 한다. Phase 5 제안은 [개발 계획](DEVELOPMENT_PLAN.md#phase-4-이후-진행-조건)의 실측 기준선·비교 가능성·통계·품질 기준 순서를 따른다.
+
+## 11. Phase 4 실제 Docker 검증
+
+2026-10-14, WSL2 Ubuntu의 일반 사용자 권한으로 검증했다. 이 세션의 기존 프로세스에는 새 보조 그룹이 반영되지 않아 기본 호출은 permission denied였으나, `getent group docker`로 사용자 등록을 확인하고 `sg docker` 하위 프로세스에서 접근과 실제 실행을 확인했다. sudo·소켓 권한 변경·패키지 설치 없이 기존 설계를 유지했다. 제품 코드의 추가 수정은 필요하지 않았으며 기존 Phase 4 구현·테스트·문서 변경을 보존했다.
+
+프로젝트 `.venv` Python 3.12.14, Pydantic 2.14.1, packaging 26.3, pytest 9.1.1, Ruff 0.16.10과 기존 uv.lock을 사용했다. 실행 Engine은 Linux x86_64, Docker 29.1.3, cgroup v2다. 별도 목표 장비에서의 성능 측정은 아니다.
+
+| 실행 명령 / 확인 | 결과 | 판정 |
+| --- | --- | --- |
+| `git fetch origin`, `git rev-list --left-right --count HEAD...origin/main` | 기준 main과 origin/main 차이 0/0 | 기존 이력 보존 |
+| `sg docker -c 'id && docker info --format "{{.ServerVersion}}" && docker run --rm hello-world'` | exit 0, Engine 29.1.3, 실제 hello-world 출력 | 일반 사용자 Docker 접근 복구 |
+| `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked --offline` | exit 0, 13 packages resolved, 12 packages checked | 독립 환경·잠금 유지 |
+| `sg docker -c 'env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv run --locked --offline pytest --run-docker -q tests/integration/test_docker_baseline.py --basetemp=artifacts/phase4-docker-validation-20261014/integration --junitxml=artifacts/phase4-docker-validation-20261014/integration-real.xml'` | 8 passed, 59.41초, exit 0 | 실제 Docker 통합 검증 |
+| `sg docker -c 'env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv run --locked --offline pytest --run-docker -q --basetemp=/tmp/aah-p4-full-20261014 --junitxml=artifacts/phase4-docker-validation-20261014/full-real.xml'` | 190 passed, 64.31초, 실패·skip·xfail 없음, exit 0 | 기존 147 + Phase 4 단위 35 + Docker 8 |
+| 프로젝트 환경의 `ruff check .`, `ruff format --check .` | exit 0, All checks passed, 36 files already formatted | lint·format 통과 |
+| `git diff --check` | exit 0 | 공백 검사 통과 |
+
+실행 준비 중 오류도 별도로 보존했다. 최초 통합 호출은 `--basetemp` 상위 디렉터리 미생성으로 8 setup errors였으며 `integration.xml`에 남겼다. 상위 경로 준비 후 위 실제 통합 8개를 통과했다. 최초 전체 호출은 긴 artifacts 임시 경로가 AF_UNIX의 경로 길이 제한을 넘어 189 passed/1 failed였으며 `full.xml`에 남겼다. 짧은 `/tmp` 경로에서 위 전체 190개를 통과했다. 두 준비 오류는 Docker/Runner 결함이나 성공 증거로 분류하지 않는다. 기존 파일이나 소켓 보안 테스트를 약화하지 않았다.
+
+| 실제 시나리오 | 확인한 결과 |
+| --- | --- |
+| 정상 3회 반복 | exit 0, functional PASS, 실제 이미지 ID·시작/종료 UTC·CPU/RAM 샘플·제한 inspect·정리 기록 |
+| CPU/RAM·권한·네트워크 | 실제 cgroup cpu.max의 quota/period=2, memory.max=1073741824, non-root·CapEff=0·NoNewPrivs=1·loopback만 존재 |
+| 비정상 종료 | exit 7, NONZERO_EXIT, stderr 기록, functional FAIL |
+| Timeout | SIGTERM 무시 fixture를 1초 timeout 후 강제 종료, exit 137, TIMEOUT, functional FAIL |
+| OOM | RAM 64MiB에서 실제 OOMKilled=true, exit 137, OOM, functional FAIL; exit code만으로 OOM 추정하지 않음 |
+| 기대 출력 불일치 | exit 0이지만 functional FAIL |
+| 로그 한도 | stdout/stderr 각각 최대 4096 bytes, logs_truncated=true, 불완전 로그로 PASS 판정하지 않음 |
+| 빌드 실패 | 의도적으로 없는 이미지 태그, DOCKER_COMMAND_FAILED, 실행 증거 UNVERIFIED·기능 UNKNOWN·시간/CPU/RAM null |
+| JSON·정리·원본 | 통합별 실행 10개 JSON 왕복, UUID·승인·버전·해시 연결, 0600 결과 파일, 원본 fixture와 패키지 사본 동일, 전용 잔여 컨테이너 및 image tag 0개 |
+
+마지막 전체 실행의 정상 run ID는 `1c1a0f4d-dd9e-48d0-8cbf-caca2484fb23`, `b0924704-26cd-4e27-8106-a3e7e3f264eb`, `b8b8414f-4f76-4910-a0e5-ba8e9a50c83d`다. wall_clock은 각각 4.385480, 4.191052, 4.203498초였으며 CPU와 메모리 샘플을 각각 2개씩 수집했다. kernel lifetime memory_peak는 세 실행 모두 null이다. 이 수치는 기준선의 관측이며 성능 개선·통계적 우위의 증거가 아니다.
+
+검증 산출물은 Git 제외 경로 `artifacts/phase4-docker-validation-20261014/`에 보관했다. 최종 `results/`에는 실행 10개의 BaselineResult JSON이 있고 각 파일 안에 BenchmarkResult·RuntimeRecord·계획·승인이 들어 있다. 디렉터리는 0700, 결과 파일은 0600이다. `validation-manifest.json`은 실행 ID·시나리오·파일 SHA-256과 XML/요약 SHA-256을 연결하며 해시는 `39e6e5c4c598fcb60d2d58771717d53ade173a8cb7955aabae7be2ad284e7360`이다. 원본 fixture `app.py` 파일 SHA-256은 `a8520333ec67a884ef0bd7f4cee9cd5eb5b6bfd43b4d224177e4279474645e5b`다. 실행 원문·원본 Agent·대용량 결과·자격 증명을 소스 커밋에 포함하지 않는다. 기존 환경 차단 산출물과 초기 실패 보고서도 보존했다.
+
+**Phase 4의 현재 구현 범위인 승인된 reference fixture 빌드·실행·제한·관측·반복·저장·실패 구분·정리의 완료 기준은 충족했다. 전체 MVP는 인수하지 않았다.** 실사용 Agent·품질 동등성, 별도 목표 실장비·ARM64·GPU, Compose 서비스 실행, 실측 워밍업, 사용자 취소 API, crash 복구, 실제 memory lifetime peak, 외부 보안 서비스, 통계 비교·자동 최적화는 미검증 또는 후속 범위다. 단위 테스트의 fake 결과는 실측으로 사용하지 않는다. 다음 작업은 별도 승인된 기존 사용자 Agent의 기준선과 Phase 5 비교 가능성·품질·통계 기준이며 이번 변경에는 추가하지 않는다.
