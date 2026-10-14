@@ -61,6 +61,9 @@ class FunctionalValidation(Contract):
 
 
 class ExperimentConditions(Contract):
+    environment_sha256: SHA256 | None = Field(default=None, exclude_if=lambda v: v is None)
+    data_fingerprints: dict[Text, SHA256] = Field(default_factory=dict, exclude_if=lambda v: not v)
+    data_preparation_run_id: UUID | None = Field(default=None, exclude_if=lambda v: v is None)
     input_sha256: SHA256
     evaluator_sha256: SHA256
     seed: StrictInt | None = None
@@ -98,6 +101,8 @@ class BenchmarkResult(Contract):
 
 class ChangeScope(StrEnum):
     HARNESS = "HARNESS"
+    DATA_PIPELINE = "DATA_PIPELINE"
+    AGENT_CONFIGURATION = "AGENT_CONFIGURATION"
     AGENT_CODE = "AGENT_CODE"
 
 
@@ -160,7 +165,7 @@ class AdaptationCandidate(Contract):
     def preserve_original_and_quality(self) -> Self:
         if self.parent_harness_id == self.resulting_harness_id:
             raise ValueError("Adaptation must identify a new Harness version")
-        if self.scope == ChangeScope.HARNESS:
+        if self.scope != ChangeScope.AGENT_CODE:
             if self.agent_version.content_sha256 != self.baseline_agent_sha256:
                 raise ValueError("Harness-only changes must preserve their baseline Agent version")
             if self.code_change_evidence is not None:

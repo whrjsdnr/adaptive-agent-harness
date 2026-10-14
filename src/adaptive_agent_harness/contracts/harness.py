@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import AfterValidator, Field, StrictBool, StringConstraints, model_validator
 
 from .base import SHA256, Contract, EvidenceKind, Fact, PositiveInteger, Text
+from .data import DataRequirement
 from .incubation import HarnessSpecification
 from .profiles import CompatibilityReport, OperationalRequirements, ResourceLimits, TargetKind
 
@@ -229,6 +230,7 @@ class DependencyInstallation(Contract):
 
 
 class ContainerHarnessRequest(Contract):
+    data_requirement: DataRequirement | None = Field(default=None, exclude_if=lambda v: v is None)
     image: BaseImage
     argv: tuple[SafeText, ...] = ()
     working_directory: Fact[ContainerPath] = Field(default_factory=Fact)
@@ -283,6 +285,7 @@ class StaticReadiness(StrEnum):
 
 
 class ContainerHarnessSpecification(HarnessSpecification):
+    data_requirement: DataRequirement | None = Field(default=None, exclude_if=lambda v: v is None)
     schema_version: Literal["1.1"] = "1.1"
     host_id: UUID
     input_fingerprints: dict[Literal["agent", "target", "host"], SHA256]
@@ -331,6 +334,7 @@ class ContainerHarnessSpecification(HarnessSpecification):
         ContainerHarnessRequest.model_validate(
             {
                 "image": self.image,
+                "data_requirement": self.data_requirement,
                 "argv": self.argv,
                 "working_directory": self.working_directory,
                 "resource_limits": self.resource_limits,
@@ -374,7 +378,7 @@ class PackageFile(Contract):
     path: ArtifactPath
     sha256: SHA256
     size_bytes: Annotated[int, Field(ge=0, strict=True)]
-    mode: Literal[0o644, 0o755] = 0o644
+    mode: Literal[0o400, 0o444, 0o600, 0o644, 0o755] = 0o644
 
 
 class ContainerPackageManifest(Contract):

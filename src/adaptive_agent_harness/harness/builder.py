@@ -1,12 +1,14 @@
 """Render and safely write a container build context. Never invoke Docker or an Agent."""
 
 import hashlib
+import io
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from adaptive_agent_harness.contracts import AgentProfile, HostProfile, TargetProfile
+from adaptive_agent_harness.contracts.data import DataPipelineBinding
 from adaptive_agent_harness.contracts.harness import (
     BuildxPlan,
     ContainerHarnessSpecification,
@@ -15,6 +17,7 @@ from adaptive_agent_harness.contracts.harness import (
     PackageFile,
     reject_credentials,
 )
+from adaptive_agent_harness.data.local import PreparedData, copy_verified, regular_file
 
 from ._utils import (
     HarnessError,
@@ -24,6 +27,7 @@ from ._utils import (
     validate_mounts,
     write_package,
 )
+from .data import check_data, validate_payload
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,7 @@ class ContainerHarnessBuilder:
         *,
         output_root: str | Path,
         package_name: str | None = None,
+        prepared_data: PreparedData | None = None,
     ) -> ContainerPackage:
         spec = ContainerHarnessSpecification.model_validate_json(specification.model_dump_json())
         for name, profile in (("agent", agent), ("target", target), ("host", host)):
@@ -65,6 +70,19 @@ class ContainerHarnessBuilder:
             ):
                 raise HarnessError("UNSAFE_MOUNT", "Writable mount exposes original Agent source")
         files: dict[str, tuple[bytes, int]] = {}
+        binding = (
+            DataPipelineBinding.model_validate_json(prepared_data.binding.model_dump_json())
+            if prepared_data
+            else None
+        )
+        check_data(spec, binding)
+        if prepared_data is not None and binding is not None:
+            buffer = io.BytesIO()
+            with regular_file(prepared_data.directory, prepared_data.path.name) as stream:
+                copy_verified(stream, buffer, binding.version.output_sha256, self.max_file_bytes)
+            validate_payload(buffer.getvalue(), binding)
+            files["data/" + prepared_data.path.name] = (buffer.getvalue(), 0o444)
+            files["data-pipeline.json"] = (canonical_json(binding.model_dump(mode="json")), 0o600)
         source_hashes = {}
         total = 0
         for relative, expected in sorted(spec.source_files.items()):
@@ -94,6 +112,34 @@ class ContainerHarnessBuilder:
                 f"COPY --chown={spec.security.user_id}:{spec.security.group_id} "
                 '["agent/", "/opt/agent/"]'
             )
+        data_instructions = []
+        if binding is not None:
+            data_instructions.append("USER 0:0")
+            for command in (
+                ("test", "!", "-L", "/opt"),
+                ("mkdir", "-p", "/opt/data"),
+                ("test", "!", "-L", "/opt/data"),
+                ("chown", "0:0", "/opt", "/opt/data"),
+                ("chmod", "0755", "/opt"),
+                ("chmod", "0555", "/opt/data"),
+            ):
+                data_instructions.append("RUN " + json.dumps(command))
+            data_instructions.append(
+                "COPY --chown=0:0 "
+                + json.dumps(
+                    [
+                        "data/input." + binding.replay.format.value.lower(),
+                        binding.specification.container_path,
+                    ]
+                )
+            )
+            if binding.specification.delivery == "ENV_PATH":
+                data_instructions.append(
+                    "ENV "
+                    + binding.specification.environment_name
+                    + "="
+                    + binding.specification.container_path
+                )
         installer = spec.installation
         if installer.mode in (InstallationMode.REQUIREMENTS, InstallationMode.PROJECT):
             argv = [installer.python_executable, "-m", "pip", "install", "--no-cache-dir"]
@@ -102,6 +148,7 @@ class ContainerHarnessBuilder:
             else:
                 argv += ["/opt/agent"]
             dockerfile.append("RUN " + json.dumps(argv))
+        dockerfile.extend(data_instructions)
         if spec.working_directory.value is not None:
             dockerfile.append("WORKDIR " + spec.working_directory.value)
         dockerfile.extend(
@@ -207,7 +254,11 @@ Rollback: stop/remove the trial containers and retain the original Agent and pri
                 "compose.yaml": (canonical_json({"services": {"agent": service}}), 0o644),
                 "harness.yaml": (canonical_json(spec.model_dump(mode="json")), 0o644),
                 ".env.example": (template.encode(), 0o644),
-                ".dockerignore": (b"**\n!Dockerfile\n!agent/\n!agent/**\n", 0o644),
+                ".dockerignore": (
+                    b"**\n!Dockerfile\n!agent/\n!agent/**\n"
+                    + (b"!data/\n!data/**\n" if binding else b""),
+                    0o644,
+                ),
                 "README.md": (readme.encode(), 0o644),
             }
         )
@@ -251,6 +302,7 @@ Rollback: stop/remove the trial containers and retain the original Agent and pri
             output,
             package_name if package_name is not None else "harness-" + str(spec.harness_id),
             files,
+            private=binding is not None,
         )
         return ContainerPackage(directory=directory, manifest=manifest)
 
@@ -297,6 +349,22 @@ Rollback: stop/remove the trial containers and retain the original Agent and pri
         if hashlib.sha256(data).hexdigest() != manifest.specification_sha256:
             raise HarnessError("PACKAGE_INTEGRITY", "Harness specification checksum mismatch")
         spec = ContainerHarnessSpecification.model_validate_json(data)
+        binding = self.data_binding(root, spec)
+        if binding is not None:
+            entries = {entry.path: entry for entry in manifest.files}
+            entry = entries.get("data/input." + binding.replay.format.value.lower())
+            if (
+                entry is None
+                or entry.sha256 != binding.version.output_sha256
+                or entry.mode != 0o444
+            ):
+                raise HarnessError(
+                    "DATA_VERSION_MISMATCH", "Data bytes do not match validated input"
+                )
+            if root.stat().st_mode & 0o777 != 0o700:
+                raise HarnessError("DATA_PACKAGE_PRIVACY", "Data package must remain private")
+            payload, _ = read_regular(root, entry.path, self.max_file_bytes)
+            validate_payload(payload, binding)
         if (
             spec.harness_id != manifest.harness_id
             or spec.agent_id != manifest.agent_id
@@ -315,3 +383,14 @@ Rollback: stop/remove the trial containers and retain the original Agent and pri
                 "Manifest and specification identities or source snapshots differ",
             )
         return manifest
+
+    def data_binding(
+        self, root: Path, spec: ContainerHarnessSpecification
+    ) -> DataPipelineBinding | None:
+        path = root / "data-pipeline.json"
+        binding = None
+        if path.exists() or path.is_symlink():
+            data, _ = read_regular(root, "data-pipeline.json", self.max_file_bytes)
+            binding = DataPipelineBinding.model_validate_json(data)
+        check_data(spec, binding)
+        return binding

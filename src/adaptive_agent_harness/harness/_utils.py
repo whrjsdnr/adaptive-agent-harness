@@ -1,12 +1,12 @@
 """Small content and filesystem helpers confined to container packaging."""
 
-import hashlib
 import json
 import os
 import re
 import stat
 from pathlib import Path, PurePosixPath
 
+from adaptive_agent_harness.contracts.base import content_hash as content_hash
 from adaptive_agent_harness.contracts.harness import BindMount, relative_artifact_path
 
 
@@ -21,17 +21,6 @@ def canonical_json(value: object) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"
     ).encode()
-
-
-def content_hash(value: object) -> str:
-    def semantic(item: object) -> object:
-        if isinstance(item, dict):
-            return {k: semantic(v) for k, v in item.items() if k != "created_at"}
-        if isinstance(item, (tuple, list)):
-            return [semantic(v) for v in item]
-        return item
-
-    return hashlib.sha256(canonical_json(semantic(value))).hexdigest()
 
 
 def stamp_created_at(value: object, timestamp: str) -> object:
@@ -129,7 +118,9 @@ def validate_mount_scope(mounts: tuple[BindMount, ...], allowed: tuple[str, ...]
             raise HarnessError("UNSAFE_MOUNT", "Mount is outside the explicit host allowlist")
 
 
-def write_package(root: Path, name: str, files: dict[str, tuple[bytes, int]]) -> Path:
+def write_package(
+    root: Path, name: str, files: dict[str, tuple[bytes, int]], *, private: bool = False
+) -> Path:
     """Exclusive creation via directory descriptors. Never reuse an existing package."""
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name):
         raise HarnessError("UNSAFE_PATH", "Package name must be one relative directory name")
@@ -143,7 +134,7 @@ def write_package(root: Path, name: str, files: dict[str, tuple[bytes, int]]) ->
     created = False
     try:
         try:
-            os.mkdir(name, mode=0o755, dir_fd=root_fd)
+            os.mkdir(name, mode=0o700 if private else 0o755, dir_fd=root_fd)
             created = True
         except FileExistsError:
             raise HarnessError(

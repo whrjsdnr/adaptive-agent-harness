@@ -1,5 +1,7 @@
 """Versioned, immutable boundary data with explicit uncertainty and provenance."""
 
+import hashlib
+import json
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -17,6 +19,24 @@ from pydantic import (
 Text = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
 SHA256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$", strict=True)]
 PositiveInteger = Annotated[int, Field(gt=0, strict=True)]
+
+
+def content_hash(value: object) -> str:
+    """Semantic contract hash, retaining business fields named created_at."""
+
+    def semantic(item: object) -> object:
+        if isinstance(item, dict):
+            metadata = isinstance(item.get("schema_version"), str)
+            return {k: semantic(v) for k, v in item.items() if k != "created_at" or not metadata}
+        if isinstance(item, (tuple, list)):
+            return [semantic(v) for v in item]
+        return item
+
+    raw = (
+        json.dumps(semantic(value), ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False)
+        + "\n"
+    ).encode()
+    return hashlib.sha256(raw).hexdigest()
 
 
 class EvidenceKind(StrEnum):

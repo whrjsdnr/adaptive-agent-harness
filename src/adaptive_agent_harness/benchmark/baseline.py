@@ -11,6 +11,7 @@ from adaptive_agent_harness.contracts import (
     TargetProfile,
     ValidationStatus,
 )
+from adaptive_agent_harness.contracts.data import DataPipelineBinding
 from adaptive_agent_harness.contracts.harness import ContainerHarnessSpecification
 from adaptive_agent_harness.contracts.runtime import BaselinePlan, RuntimeRecord
 from adaptive_agent_harness.harness._utils import content_hash
@@ -25,6 +26,7 @@ def evaluate(
     plan: BaselinePlan,
     repetition: int,
     warmup: bool,
+    data_binding: DataPipelineBinding | None = None,
 ) -> BenchmarkResult:
     values = (
         ("wall_clock", record.wall_seconds, "s", "Docker StartedAt/FinishedAt"),
@@ -70,6 +72,22 @@ def evaluate(
             status=ValidationStatus.PASS if passed else ValidationStatus.FAIL,
             test_result_references=(f"runtime:{record.run_id}:exact-stdout",),
         )
+    metrics = tuple(
+        Metric(
+            name=name,
+            value=value,
+            unit=unit,
+            source=source,
+            evidence=EvidenceKind.MEASURED if value is not None else EvidenceKind.UNVERIFIED,
+            run_id=record.run_id,
+        )
+        for name, value, unit, source in values
+    )
+    if data_binding and record.execution_started:
+        metrics += tuple(
+            Metric.model_validate({**m.model_dump(), "run_id": record.run_id})
+            for m in data_binding.delivery_metrics.metrics
+        )
     return BenchmarkResult(
         run_id=record.run_id,
         agent_id=spec.agent_id,
@@ -79,6 +97,17 @@ def evaluate(
         host=host,
         target=target,
         conditions=ExperimentConditions(
+            environment_sha256=content_hash(record.daemon_identity)
+            if record.daemon_identity and not spec.environment_references
+            else None,
+            data_preparation_run_id=data_binding.delivery_metrics.run_id if data_binding else None,
+            data_fingerprints={
+                "source": data_binding.version.source_sha256,
+                "schema": data_binding.validation.schema_sha256,
+                "evaluated": data_binding.version.output_sha256,
+            }
+            if data_binding
+            else {},
             input_sha256=plan.input_sha256,
             evaluator_sha256=content_hash(
                 {"validator": "exact-stdout-v1", "expected_stdout": plan.expected_stdout}
@@ -96,16 +125,6 @@ def evaluate(
         execution_evidence=EvidenceKind.MEASURED
         if record.execution_started
         else EvidenceKind.UNVERIFIED,
-        metrics=tuple(
-            Metric(
-                name=name,
-                value=value,
-                unit=unit,
-                source=source,
-                evidence=EvidenceKind.MEASURED if value is not None else EvidenceKind.UNVERIFIED,
-                run_id=record.run_id,
-            )
-            for name, value, unit, source in values
-        ),
+        metrics=metrics,
         functional_validation=functional,
     )

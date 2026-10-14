@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, Field, StrictBool, field_validator, model_validator
 
 from .base import SHA256, Contract, Fact, Text
+from .data import DataPipelineBinding
 from .incubation import BenchmarkResult
 
 
@@ -87,6 +88,7 @@ class RuntimeRecord(Contract):
 
 
 class BaselineResult(Contract):
+    data_pipeline: DataPipelineBinding | None = Field(default=None, exclude_if=lambda v: v is None)
     benchmark: BenchmarkResult
     runtime: RuntimeRecord
     plan: BaselinePlan
@@ -103,4 +105,19 @@ class BaselineResult(Contract):
             or self.benchmark.agent_source_sha256 != self.approval.agent_source_sha256
         ):
             raise ValueError("Baseline records must refer to the same approved execution")
+        if self.data_pipeline is not None:
+            d = self.data_pipeline
+            if (
+                d.specification.agent_id != self.benchmark.agent_id
+                or d.specification.agent_source_sha256 != self.benchmark.agent_source_sha256
+                or self.plan.input_sha256 != d.version.output_sha256
+                or self.benchmark.conditions.data_preparation_run_id != d.delivery_metrics.run_id
+                or self.benchmark.conditions.data_fingerprints
+                != {
+                    "source": d.version.source_sha256,
+                    "schema": d.validation.schema_sha256,
+                    "evaluated": d.version.output_sha256,
+                }
+            ):
+                raise ValueError("Baseline must pin the validated data execution and version")
         return self

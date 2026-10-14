@@ -2,7 +2,7 @@
 
 기존 AI Agent와 목표 하드웨어 프로파일을 분석하여 적합한 Container Harness를 생성하고, 실제 실행과 벤치마크를 반복해 Agent별 최적화 구성을 탐색하는 적응형 부화장 플랫폼이다.
 
-**현재 상태: Phase 4 Baseline Runner 구현, reference fixture의 실제 Docker 통합 테스트 8개 통과.** 기존 계약·분석·Harness 패키징을 유지하며 승인된 패키지의 Docker 빌드·실행·관측·BenchmarkResult JSON 저장 API를 추가했다. WSL2 Linux에서 정상 3회 반복, CPU/RAM 제한, nonzero·timeout·OOM 및 정리를 검증했다. 사용자 Agent·목표 장비와 전체 MVP 인수는 별도다. 자동 최적화·Scheduler·Hardware Emulator·보안 실제 연동·플랫폼 CLI·서버는 없다. [Phase 4 실행 안내](docs/PHASE4_BASELINE.md)를 따른다.
+**현재 상태: Phase 5A~5B 데이터 파이프라인과 실측 최적화의 기초 구현.** 승인된 로컬 CSV/JSON/JSONL의 검증·변환·Replay, 읽기 전용 Harness 연결, 기존 BenchmarkResult 비교·병목 가설·실험 계획 계약을 제공한다. Simulator는 선택적 계약·Adapter·Mock 검증에 한정한다. Docker 포함 전체 테스트 289개를 통과했고 기존 Phase 4의 190개를 유지했다. 사용자 Agent·목표 장비와 전체 MVP 인수는 별도다. 후보 자동 적용·실행·자동 최적화·Scheduler·Hardware Emulator·보안 실제 연동·플랫폼 CLI·서버는 없다. [Phase 4 안내](docs/PHASE4_BASELINE.md), [Phase 5 안내](docs/PHASE5_FOUNDATION.md)를 따른다.
 
 ## 목표와 범위
 
@@ -19,6 +19,7 @@ Harness를 먼저 개선하고, Agent 코드 변경은 명시적 승인·테스�
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 모듈 책임, 계약, 의존성과 실행 흐름 |
 | [DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | 10영업일 계획, 선행 조건과 일별 검증 |
 | [ACCEPTANCE_CRITERIA.md](docs/ACCEPTANCE_CRITERIA.md) | 현재 단계 및 후속 MVP의 완료 기준 |
+| [PHASE5_FOUNDATION.md](docs/PHASE5_FOUNDATION.md) | 로컬 데이터 API·보안·측정·비교·Simulator 경계 |
 
 ## 기본 구조
 
@@ -68,7 +69,7 @@ Harness를 먼저 개선하고, Agent 코드 변경은 명시적 승인·테스�
 | Python | `.venv/bin/python`, 3.12.14 | 다른 프로젝트 가상환경 사용 없음 |
 | Pydantic | 2.14.1 | JSON·경계 검증 테스트 통과 |
 | packaging | 26.3 | PEP 508 의존성·Python 버전 제약 파싱 |
-| pytest | 9.1.1 | Docker 포함 전체 190개 통과; 실패·skip 없음 |
+| pytest | 9.1.1 | Docker 포함 전체 289개 통과; 실패·skip 없음 |
 | Ruff | 0.16.10 | lint·format 검사 통과 |
 | uv | 0.12.8 | 의존성 설치·잠금 관리 |
 | Docker | CLI/Engine 29.1.3, Compose 2.40.3, cgroup v2 | docker 그룹 적용 후 hello-world 및 reference fixture 통합 테스트 8개 통과 |
@@ -92,6 +93,8 @@ env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked --python 3.12
 ```
 
 `uv sync --locked`는 잠금 파일을 변경하지 않고 프로젝트 `.venv`를 구성한다. 캐시가 충분하면 `--offline`을 추가할 수 있다. 단위 테스트는 외부 명령과 소켓 연결을 차단한다. 실제 통합 테스트는 `.venv/bin/pytest --run-docker -q tests/integration`으로 명시적으로 허용하며 Docker 접근 실패는 오류로 보고한다. 플랫폼 실행 CLI는 아직 없다.
+
+전체 Docker 회귀는 `.venv/bin/pytest --run-docker -q`로 실행한다. 기존 세션에 docker 그룹이 반영되지 않았다면 이미 등록된 그룹을 `sg docker -c '.venv/bin/pytest --run-docker -q'`로 적용할 수 있다. 소켓 권한이나 시스템 설정을 변경하지 않는다. 긴 작업 경로에서는 Unix socket 테스트의 임시 경로에 짧은 `/tmp` 경로를 사용한다.
 
 ## Python API 사용
 
@@ -118,7 +121,7 @@ Agent Analyzer는 pyproject의 정적 메타데이터·PEP 508 의존성·requir
 
 Compatibility Engine의 `FIT`는 알려진 정적 요구사항의 일치를 뜻한다. 의존성 설치·ABI·실제 Agent 실행·성능은 별도 검증이 필요하다. 판정 우선순위는 `UNSUPPORTED > UNKNOWN > ADAPT_REQUIRED > FIT`이며 각 항목의 근거와 미확인 이유를 반환한다. 의존성이 있으면 설치 가능성은 `UNKNOWN`이다.
 
-Incubation 계약은 실측·추정, 예상 효과·검증 결과, Harness·Agent 코드 변경과 반복 단계를 기록한다. 품질 저하·미검증 결과의 ACCEPTED 기록을 거부하지만 후보 생성·성능 비교·자동 채택·승인 처리·롤백 실행은 수행하지 않는다.
+Incubation 계약은 실측·추정, 예상 효과·검증 결과, Harness·Data Pipeline·Agent 설정/코드 변경과 반복 단계를 기록한다. Phase 5A~5B는 별도 비교·병목 가설·계획 API를 제공하며 품질 저하·미검증 결과의 채택을 거부한다. 실제 후보 생성/적용·자동 실행/채택·승인 UI·롤백 실행은 수행하지 않는다.
 
 ## Phase 3: 명세와 Container Package 생성
 

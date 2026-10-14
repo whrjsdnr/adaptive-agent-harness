@@ -361,6 +361,7 @@ class HarnessSpecificationGenerator:
             }
         )
         return ContainerHarnessSpecification(
+            data_requirement=request.data_requirement,
             created_at=request.created_at,
             harness_id=uuid5(NAMESPACE_URL, "adaptive-harness:" + identity),
             agent_id=agent.agent_id,

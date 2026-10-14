@@ -181,7 +181,19 @@ class DockerCLI:
         return result.stdout.decode().strip()
 
     def inspect(self, name: str) -> dict:
-        return json.loads(self.command(["inspect", name], cwd=Path("/")).stdout)[0]
+        data = json.loads(self.command(["inspect", name], cwd=Path("/")).stdout)[0]
+        # Docker may publish the exit event before its OOM event updates inspect.
+        # Re-observe briefly; exit 137 alone remains a nonzero exit, never OOM evidence.
+        deadline = time.monotonic() + 1
+        while (
+            data.get("State", {}).get("Status") == "exited"
+            and data["State"].get("ExitCode") == 137
+            and not data["State"].get("OOMKilled")
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+            data = json.loads(self.command(["inspect", name], cwd=Path("/")).stdout)[0]
+        return data
 
     def verify_policy(self, name: str, spec: ContainerHarnessSpecification) -> None:
         data = self.inspect(name)

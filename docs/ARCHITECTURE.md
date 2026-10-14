@@ -2,7 +2,7 @@
 
 ## 1. 설계 수준과 선택
 
-공통 계약·분석·Harness 패키징과 Phase 4 Docker 실행 어댑터·Baseline Runner·결과 저장을 구현했다. 저장소 reference fixture로 WSL2 Linux의 실제 Docker 통합 테스트 8개를 통과했다. 사용자 Agent·목표 장비 검증과 최적화·Scheduler·보안 실제 연동·Porting Lite 전체 기능·Agent 코드 변경 승인은 후속 범위다. Incubation 데이터는 기록 스키마이며 최적화 엔진이 아니다.
+공통 계약·분석·Harness 패키징과 Phase 4 실행, Phase 5A~5B 데이터 파이프라인·비교·병목 가설·실험 계획을 구현했다. Simulator는 요구사항·Capability·선택적 Adapter·Mock에 한정한다. 후보 적용/실행·사용자 Agent·목표 장비·자동 최적화·Scheduler·보안 실제 연동·Porting Lite 전체 기능·Agent 코드 변경 승인은 후속 범위다. Incubation 데이터는 기록 스키마이며 자동 최적화 엔진이 아니다.
 
 제어부는 Python 3.12 단일 프로세스로 시작한다. Pydantic v2 데이터 계약, 주입 가능한 실행·저장·외부 서비스 어댑터, 로컬 산출물 저장을 사용한다. Docker 실행 백엔드와 도메인 로직을 분리하고, 플랫폼 자체의 웹 서버나 상시 서비스는 우선 만들지 않는다. 후속 CLI는 orchestration을 호출하는 얇은 경계로 설계한다.
 
@@ -33,7 +33,7 @@ flowchart TD
 
 ## 3. 모듈 책임과 제안 인터페이스
 
-아래 표는 전체 MVP 인터페이스 제안이다. contracts·analyzer·harness와 아래 13절의 Phase 4 API가 구현되었다. 나머지 함수는 후속 설계 표기다. 파일 쓰기는 Builder와 JsonResultStore 어댑터에서 수행하며 명세 생성과 benchmark 판단은 외부 I/O를 하지 않는다.
+아래 표는 전체 MVP 인터페이스 제안이다. contracts·analyzer·harness와 아래 13~15절의 Phase 4/5 API가 구현되었다. 나머지 함수는 후속 설계 표기다. 파일 쓰기는 Builder·LocalFilePipeline·JsonResultStore 어댑터에서 수행하며 명세 생성과 benchmark 판단은 외부 I/O를 하지 않는다.
 
 | 모듈 | 책임 | 제안 인터페이스 | 경계 |
 | --- | --- | --- | --- |
@@ -68,8 +68,8 @@ flowchart TD
 | `RunRequest` | 이미지·Harness·입력·목표와 호스트 참조, 제한·seed·벤치마크·보안 검토 참조 |
 | `RunResult` | `run_id`, 실제 호스트·이미지 digest, 시각, 종료 상태·exit code·timeout·OOM, 로그·원시 지표·오류·정리 결과 |
 | `BenchmarkPlan` | 데이터·평가 해시, 워밍업·반복·seed, 지표·단위·집계법·목표 방향, 최소 개선·품질 한도·변동 판정 규칙 |
-| `BenchmarkResult` | 실행별 Agent/Harness/Host/Target·실험 조건·지표·기능 검증 계약. Phase 4에서 실행별 생성하며 비교·최적화 집계는 미구현 |
-| `AdaptationCandidate` | 구현된 최소 계약: HARNESS/AGENT_CODE, 기준 Agent 버전·부모/결과 Harness·변경 필드/해시·이유·근거 실행·예상 효과·실제 검증·결정·코드 변경 증거. 후보 생성은 미구현 |
+| `BenchmarkResult` | 실행별 Agent/Harness/Host/Target·실험 조건·지표·기능 검증 계약. Phase 4/5 실행별 생성과 Phase 5A~5B 반복 통계·비교를 제공하며 자동 최적화는 미구현 |
+| `AdaptationCandidate` | HARNESS/DATA_PIPELINE/AGENT_CONFIGURATION/AGENT_CODE, 기준 Agent 버전·부모/결과 Harness·변경 필드/해시·이유·근거 실행·예상 효과·실제 검증·결정·코드 변경 증거. 실제 후보 생성·적용/실행은 미구현 |
 | `ComparisonResult` | 기준·후보 참조, 비교 가능성·개선·품질 판정, `accepted/rejected/inconclusive`, 근거 |
 | `SearchBudget` | 최대 후보 수·총 시간·예약 자원·개선 없음 횟수, 소비 기록과 종료 이유 |
 | `IncubationReport` | 입력·기준·모든 후보·최종 결정 참조, 예산·종료 원인·미검증 항목 |
@@ -200,3 +200,21 @@ Compose의 deny 설정과 allowlist 선언을 분리하며 선택적 egress 강�
 - `storage.baseline.JsonResultStore.save`: 실행 UUID별 결과·계획·승인을 원자적·비덮어쓰기 JSON으로 저장한다.
 
 Package의 false 실행 플래그는 정적 산출물의 상태이며 실제 실행 기록과 별개다. Phase 4 결과는 원본·Harness 버전·소스 bundle·manifest·명세·이미지·실행·승인 ID를 연결한다. 자세한 API·측정 정의·검증 범위와 한계는 [실행 안내](PHASE4_BASELINE.md)를 따른다.
+
+## 14. Phase 5A~5B 데이터와 실측 판단 경계
+
+- contracts/data: 선언·승인·스키마·버전·검증·Metric·Replay 연결. 기존 ResourceLimits·Fact·Metric·ValidationStatus를 재사용한다.
+- analyzer/data: AgentProfile 해시를 확인한 AST 관찰·사용자 계약 보완. Agent 실행/데이터 임의 접근 없음.
+- data/local: DataSourceAdapter 경계와 실제 로컬 파일 구현. 승인·hash 검증, 고정 descriptor·bounded streaming/buffer, private staging/atomic publication, 불변 artifact·복원/Replay.
+- harness/builder: 선택적 prepared_data를 기존 manifest에 포함하며 실제 bytes/schema/count를 재검사한다. optional data_requirement로 pipeline 구성 hash를 Harness 식별에 연결한다. 기본 기존 공개 인자와 무데이터 JSON을 유지한다.
+- orchestration/baseline: 기존 승인·검증·실행·저장을 재사용하고 데이터 검증/버전을 연결한다. 자동 후보 적용이나 Agent 코드 수정 없음.
+- benchmark/comparison, bottleneck: filesystem/Docker 호출 없는 비교·통계·품질 gate·관측 가설. Agent 유형별 최적화 처방 없음.
+- contracts/optimization: 기존 AdaptationCandidate/AgentVersion/ExpectedEffect/CandidateDecision과 연결한 계획·예산·범위·결과 계약. 실행 권한/변경 적용은 false다.
+
+공통 semantic hash는 contracts/base에 두고 기존 harness._utils.content_hash import를 유지한다. Contract metadata의 created_at만 제외하며 데이터 schema의 비즈니스 필드 이름 created_at은 hash에서 제거하지 않는다. BaselineResult·ExperimentConditions에 새 optional 정보만 추가하고 None/빈 값은 기존 JSON에서 생략한다. 자세한 측정 정의와 Linux/패키지 한도는 [Phase 5 안내](PHASE5_FOUNDATION.md)를 따른다.
+
+## 15. Simulator Integration 책임 분리
+
+SimulatorRequirement/Capability/Response는 순수 계약이며 선택적 capability별 지원/미지원/UNKNOWN과 증거 종류를 보존한다. Incubation Engine은 요구사항·실행 결과를 분석/평가하고 Porting Manager에 계약을 전달한다. Porting Manager의 simulator Adapter 경계가 선택·연결·환경 설정/검증·센서/상태 파이프라인·명령 변환·연결 상태/timeout/error를 맡는다. Incubation Engine에서 simulator I/O를 호출하지 않는다.
+
+현재 porting/simulator.SimulatorAdapter는 공통 invoke와 optional 동작 wrappers만 제공한다. 실제 backend가 없으면 성공을 꾸미지 않는다. Mock은 테스트에만 있으며 응답은 SIMULATED다. 실제 Porting Manager의 연결 관리자, PX4/Gazebo/ROS 2/AirSim backend, 하드웨어 에뮬레이션은 구현하지 않는다. 시뮬레이터 상태·센서 dataset과 실제 장비 실측을 혼동하지 않는다.

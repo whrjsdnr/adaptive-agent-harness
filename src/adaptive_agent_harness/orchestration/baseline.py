@@ -165,6 +165,11 @@ class BaselineRunner:
             spec, spec_hash, environment = integrate(
                 root, approval, agent, host, target, bindings or {}
             )
+            data_binding = ContainerHarnessBuilder().data_binding(root, spec)
+            if data_binding is not None and plan.input_sha256 != data_binding.version.output_sha256:
+                raise RuntimeFailure(
+                    "DATA_INPUT_HASH_MISMATCH", "Plan must pin the evaluated data bytes"
+                )
             results = []
             for index in range(plan.warmups + plan.repetitions):
                 record = self._execute(root, spec, approval, plan, environment)
@@ -178,9 +183,14 @@ class BaselineRunner:
                     plan,
                     index + 1 if warmup else index - plan.warmups + 1,
                     warmup,
+                    data_binding,
                 )
                 result = BaselineResult(
-                    benchmark=benchmark, runtime=record, plan=plan, approval=approval
+                    benchmark=benchmark,
+                    runtime=record,
+                    plan=plan,
+                    approval=approval,
+                    data_pipeline=data_binding,
                 )
                 self.store.save(result)
                 results.append(result)

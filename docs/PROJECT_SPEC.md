@@ -2,7 +2,7 @@
 
 ## 1. 목적, 용어, 구현 상태
 
-기존 AI Agent를 실행할 Container Harness를 만들고 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석·Harness 패키징 및 Phase 4 Docker Baseline Runner다. 저장소 reference fixture의 실제 Docker 통합 테스트 8개를 WSL2 Linux에서 통과했다. 사용자 Agent·목표 장비 검증, 자동 최적화와 전체 MVP 인수는 미완료다.
+기존 AI Agent를 실행할 Container Harness를 만들고 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석·Harness 패키징, Phase 4 Docker Baseline Runner 및 Phase 5A~5B 데이터 파이프라인·실측 비교·병목 가설·계획 계약이다. Simulator는 계약·선택적 Adapter·Mock에 한정한다. 사용자 Agent·목표 장비 검증, 후보 자동 적용/실행, 자동 최적화와 전체 MVP 인수는 미완료다.
 
 | 용어 | 정의 |
 | --- | --- |
@@ -155,3 +155,13 @@ Phase 3 출력은 Dockerfile·Compose·명세·환경 템플릿·안내문·Mani
 승인된 소스·패키지 해시, Analyzer/Host/Target 지문, 명시적 명령·의존성·작업 디렉터리·환경 참조·CPU/RAM 제한을 확인한다. 패키지 사본을 재검증한 뒤 Docker에서만 빌드·실행한다. 외부 보안 서비스 대신 사용자가 선택한 TRUSTED_LOCAL_TRIAL만 지원하며 이를 보안 승인으로 기록하지 않는다.
 
 BaselinePlan은 반복·워밍업·timeout·로그 한도·기대 stdout을 지정한다. 기대 결과가 없으면 기능 UNKNOWN이며 exit 0만으로 PASS가 되지 않는다. 실패·OOM·timeout·정리 오류를 보존하고 기존 BenchmarkResult를 BaselineResult에 포함해 원자적으로 저장한다. 측정 기준과 한계는 [실행 안내](PHASE4_BASELINE.md)를 따른다. 최적화·자동 변경·Scheduler·코드 수정·에뮬레이션·드론 배포는 구현하지 않는다.
+
+## 9. Phase 5A~5B: 데이터와 실험 기반 최적화
+
+Agent의 read site·데이터 format·환경/CLI 사용을 AST 관찰 정보로 수집하며 필요성·스키마·주기·순서의 미확인은 명시적 계약으로 보완한다. 승인된 로컬 CSV/JSON/JSONL을 제한된 record/byte buffer로 검증·정규화·projection하고 원본 불변·Replay·버전·측정을 보존한다. 검증된 데이터 사본만 비공개 Harness에 root 소유 읽기 전용으로 넣으며 버전·검증·pipeline 측정과 Agent 측정을 구분한다. 기존 데이터 없는 실행 API를 유지한다.
+
+비교는 Agent/data/evaluator/Target/Host/측정 방법의 일치, warmup 제외, 독립 반복·변동과 측정된 품질 동등성을 요구한다. 실제 수치만 통계화하며 UNKNOWN·실패·불안정은 개선 확정으로 바꾸지 않는다. 병목은 가능한 원인과 불확실성·추가 측정·run ID를 반환한다. 계획은 HARNESS/DATA_PIPELINE/AGENT_CONFIGURATION/AGENT_CODE를 구분하며 후보 적용·실행은 false로 고정한다. 상세 계약·API·한도는 [Phase 5 안내](PHASE5_FOUNDATION.md)를 따른다.
+
+## 10. Simulator Integration 설계 경계
+
+Incubation Engine은 SimulatorRequirement·센서/상태·제어 요구사항과 기능·성능 증거를 분석/평가한다. Porting Manager는 Adapter 생성/선택·연결/해제·환경 설정/검증·데이터 파이프라인·명령/프로토콜 연결·연결 상태/timeout/error를 책임진다. Incubation Engine이 연결을 직접 수행하지 않는다. SimulatorCapability는 동작별 KNOWN/UNKNOWN 지원 정보를 표현하며 공통 connect/disconnect/reset/step/observe/send_action/get_status 중 미지원은 UNSUPPORTED로 보고한다. 이번에는 계약과 기본 인터페이스·Mock만 구현하며 PX4 SITL/Gazebo/ROS 2/AirSim·하드웨어 에뮬레이션은 후속 범위다.

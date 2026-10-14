@@ -2,7 +2,7 @@
 
 ## 1. 현재 단계와 MVP 인수의 구분
 
-Phase 3까지의 계약·분석·패키징 인수를 유지한다. Phase 4 reference fixture의 실제 Docker 통합 테스트 8개를 WSL2 Linux에서 통과했다. 아래 이전 기록과 10절의 환경 차단, 11절의 실제 검증을 구분한다. fixture 인수는 사용자 Agent·목표 장비·전체 MVP 인수 증거가 아니다.
+Phase 3까지의 계약·분석·패키징 및 Phase 4 reference fixture 인수를 유지한다. Phase 5A~5B의 데이터 파이프라인·비교·병목·계획과 Simulator 계약/Mock 검증은 12절을 따른다. 아래 이전 기록과 10절의 환경 차단, 11절의 Phase 4 검증을 구분한다. fixture 인수는 사용자 Agent·목표 장비·전체 MVP 인수 증거가 아니다.
 
 ## 2. 초기 문서·구조 단계의 완료 기준 (이전 단계)
 
@@ -203,3 +203,81 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 검증 산출물은 Git 제외 경로 `artifacts/phase4-docker-validation-20261014/`에 보관했다. 최종 `results/`에는 실행 10개의 BaselineResult JSON이 있고 각 파일 안에 BenchmarkResult·RuntimeRecord·계획·승인이 들어 있다. 디렉터리는 0700, 결과 파일은 0600이다. `validation-manifest.json`은 실행 ID·시나리오·파일 SHA-256과 XML/요약 SHA-256을 연결하며 해시는 `39e6e5c4c598fcb60d2d58771717d53ade173a8cb7955aabae7be2ad284e7360`이다. 원본 fixture `app.py` 파일 SHA-256은 `a8520333ec67a884ef0bd7f4cee9cd5eb5b6bfd43b4d224177e4279474645e5b`다. 실행 원문·원본 Agent·대용량 결과·자격 증명을 소스 커밋에 포함하지 않는다. 기존 환경 차단 산출물과 초기 실패 보고서도 보존했다.
 
 **Phase 4의 현재 구현 범위인 승인된 reference fixture 빌드·실행·제한·관측·반복·저장·실패 구분·정리의 완료 기준은 충족했다. 전체 MVP는 인수하지 않았다.** 실사용 Agent·품질 동등성, 별도 목표 실장비·ARM64·GPU, Compose 서비스 실행, 실측 워밍업, 사용자 취소 API, crash 복구, 실제 memory lifetime peak, 외부 보안 서비스, 통계 비교·자동 최적화는 미검증 또는 후속 범위다. 단위 테스트의 fake 결과는 실측으로 사용하지 않는다. 다음 작업은 별도 승인된 기존 사용자 Agent의 기준선과 Phase 5 비교 가능성·품질·통계 기준이며 이번 변경에는 추가하지 않는다.
+
+## 12. Phase 5A~5B 완료 기준과 검증
+
+2026-10-14, 기준 main/origin/main `208121a`의 깨끗한 작업 트리에서 시작했다. 기존 Phase 4 소스·reference fixture·기록을 보존하고 프로젝트 전용 Python 3.12.14/uv.lock을 재사용했다. Pydantic 2.14.1, packaging 26.3, pytest 9.1.1, Ruff 0.16.10이며 새 의존성이나 시스템 패키지를 설치하지 않았다. 실제 Docker는 기존 docker 그룹을 sg 하위 프로세스에 적용한 WSL2 Ubuntu/Linux x86_64/Engine 29.1.3/cgroup v2다.
+
+| 완료 기준 | 실행 검증과 결과 |
+| --- | --- |
+| 정적 요구사항·명시적 계약 | AST read/write/directory/format/env/CLI 관찰, source hash 재확인, 미확인 필요성/schema/주기/순서는 UNKNOWN, Agent import/실행 없음 |
+| 로컬 데이터·Replay | CSV/JSON/JSONL→세 출력 format, 필수 field/type·중복 key·NaN/overflow·문법·빈 입력, REJECT/QUARANTINE, 원본 불변, projection·결정성·파생 버전/parent·별도 프로세스 복원 |
+| 안전한 스트리밍·저장 | 16MiB 초과 JSON/18,000개 record를 4개/8KiB buffer로 처리, fixture setup을 제외한 tracemalloc peak < 5MiB, source/record/output/count 한도, symlink/traversal/root 교체, write 실패 정리, 기존 빈 version 디렉터리 비덮어쓰기 |
+| Harness / Baseline | exact data approval·version/schema/actual bytes 재검증, 누락/UNKNOWN/다른 Agent/plan hash 차단, private package, actual container FILE_ARG/ENV_PATH, root 소유 0444 file·0555 parent 읽기/쓰기 차단, CPU/RAM 제한·network/security 유지, 데이터 측정과 미실행 Agent 구분 |
+| 비교·분석·계획 | warmup 제외·통계·독립 preparation 중복 제거, source/data/evaluator/Target/Host/Engine/method 비교, 품질 저하 거절·증거 부족/불안정 보류, OOM/timeout/nonzero/CPU와 추가 측정, 다른 조건끼리 변동 계산 금지, frozen baseline·budget·scope·apply/execute=false |
+| Simulator 경계 | requirement/capability JSON, 선택적 기능 UNKNOWN/UNSUPPORTED, backend 없는 선언을 성공으로 반환하지 않음, Mock 응답 SIMULATED, 연결 역할은 Porting Manager |
+| 기존 기능 | 기존 182개 단위 + Phase 4 Docker 8개 그대로 통과, 기존 실제 Phase 4 JSON 10개 재해석 성공, 원본 reference fixture 변경 없음 |
+
+최종 명령과 exit code:
+
+| 명령 | 결과 |
+| --- | --- |
+| `git fetch origin`, `git rev-list --left-right --count HEAD...origin/main` (작업 시작) | 0/0, exit 0 |
+| `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked --offline` | 13 packages resolved/12 checked, exit 0, 기존 lock 유지 |
+| `sg docker -c '.venv/bin/pytest --run-docker -q --basetemp=/tmp/aah-p5-accepted-20261014 --junitxml=artifacts/phase5-validation-20261014/accepted.xml'` | **289 passed, 132.46초, 실패·skip·xfail 0, exit 0** |
+| `.venv/bin/ruff check .` | All checks passed, exit 0 |
+| `.venv/bin/ruff format --check .` | 54 files already formatted, exit 0 |
+| `git diff --check` | exit 0 |
+| 새로운 `.venv/bin/python` 프로세스의 `PreparedData.load(...).replay()` | `[id=1,2,3]` 재현, 해시/schema/count 검증, exit 0 |
+| `sg docker -c 'docker ps -aq --filter label=org.adaptive-harness.run && docker image ls -q --filter reference=adaptive-baseline:*'` | 출력 없음, 전용 잔여 container/tag 0, exit 0 |
+
+기존 190개를 유지하고 신규 단위 93개(데이터 53, Docker 상태 관측 2, 비교/가설/계획 26, Harness 연결 9, Simulator Mock 3)와 Docker 데이터 6개를 추가했다. 기본 pytest에서는 명시적 미허용 Docker 14개를 skip하며 통과 증거가 아니다. 위 최종 전체 실행은 --run-docker로 모두 실제 수행했다. 단위 테스트의 synthetic measured 입력은 계약 경계용이며 실제 최적화 성과로 사용하지 않는다.
+
+문제와 수정도 구분했다. 변경 전 전체 회귀는 189 passed/1 failed였고 OOM 사례가 exit 137/OOMKilled=false로 관측됐다. Docker adapter에서 종료 상태를 최대 1초 재조회하며 OOMKilled=true 관측만 OOM으로 판정한다. 새 데이터 Docker 6개는 처음 COPY --chmod의 BuildKit 의존성 때문에 실패했다. private context·일반 COPY·고정 exec-form 권한 설정으로 legacy builder에서 재검증했다. 중간 검사에서 비교 fixture의 evaluator를 원래와 같은 해시로 변경한 테스트 오류 및 import 순환·format 차이도 수정했다. 이를 최종 실패/skip으로 숨기지 않았으며 최종 실패는 없다.
+
+실제 Docker 결과는 16개(기존 정상 3회 및 오류/정책/로그/빌드 7개, 데이터 6개)다. 최종 Git 제외 경로 `artifacts/phase5-validation-20261014/accepted-results/`에 0700/0600으로 보존했다. `accepted-manifest.json`은 run/benchmark/pipeline version ID와 JSON SHA-256을 연결하며 해시는 `6aca97002389850ea6dec7a95c42febf2f0e6ca0285d687d70c7c8ba9419c64a`다. `replay-example/`은 별도 프로세스에서 재검증한 private artifact다. 기존 Phase 4 결과와 중간 검증 기록은 덮어쓰지 않았다. 원본 데이터·Agent·대용량 결과·자격 증명은 소스 커밋에 넣지 않는다.
+
+실제 비교 예시는 정상 실측 3개를 2/1개 그룹으로 나눈 `accepted-comparison.json`이다. 통계는 실제 값에서 계산했지만 품질 동등성 증거와 충분한 독립 반복이 없으므로 **INCONCLUSIVE**, improvement_fraction은 UNKNOWN/null이며 성능 향상 수치를 생성하지 않았다. `accepted-bottlenecks.json`은 실제 CPU 활동·OOM·timeout·nonzero와 근거 run ID를 연결한다. `planned-only-experiment.json`은 OOM 기록에 근거한 Harness 가설·frozen baseline·4회/120초 예산·검증 기준이며 apply_changes=false다. 후보 적용/실행은 0회다. 역할과 API는 [Phase 5 안내](PHASE5_FOUNDATION.md)를 따른다.
+
+변경 파일:
+
+```text
+AGENTS.md
+README.md
+docs/ACCEPTANCE_CRITERIA.md
+docs/ARCHITECTURE.md
+docs/DEVELOPMENT_PLAN.md
+docs/PHASE4_BASELINE.md
+docs/PHASE5_FOUNDATION.md
+docs/PROJECT_SPEC.md
+src/adaptive_agent_harness/analyzer/__init__.py
+src/adaptive_agent_harness/analyzer/data.py
+src/adaptive_agent_harness/benchmark/baseline.py
+src/adaptive_agent_harness/benchmark/bottleneck.py
+src/adaptive_agent_harness/benchmark/comparison.py
+src/adaptive_agent_harness/contracts/base.py
+src/adaptive_agent_harness/contracts/data.py
+src/adaptive_agent_harness/contracts/harness.py
+src/adaptive_agent_harness/contracts/incubation.py
+src/adaptive_agent_harness/contracts/optimization.py
+src/adaptive_agent_harness/contracts/runtime.py
+src/adaptive_agent_harness/contracts/simulator.py
+src/adaptive_agent_harness/data/__init__.py
+src/adaptive_agent_harness/data/local.py
+src/adaptive_agent_harness/harness/_utils.py
+src/adaptive_agent_harness/harness/builder.py
+src/adaptive_agent_harness/harness/data.py
+src/adaptive_agent_harness/harness/generator.py
+src/adaptive_agent_harness/orchestration/baseline.py
+src/adaptive_agent_harness/porting/simulator.py
+src/adaptive_agent_harness/runtime/docker.py
+tests/fixtures/data_reader/app.py
+tests/integration/test_docker_data_pipeline.py
+tests/unit/test_data_pipeline.py
+tests/unit/test_docker_observation.py
+tests/unit/test_empirical_optimization.py
+tests/unit/test_harness_data.py
+tests/unit/test_simulator.py
+```
+
+**현재 Phase 5A~5B 완료 기준을 위 검증 범위에서 충족했다.** 실제 사용자 Agent·LLM API E2E, 목표 실장비/ARM64/GPU/Windows/Junction, 실제 Simulator/PX4/Gazebo/ROS 2/AirSim, 외부 API/DB/영상/broker, nested schema, end-to-end consumer 지연, pipeline OS CPU/RAM quota, crash journal/recovery, 후보 적용/반복 실행·Agent patch·coding agent·자동 최적화·Scheduler·에뮬레이션·드론 배포는 미검증 또는 미구현이다. 검증한 이미지 계열은 python:3.12-slim이며 다른 이미지의 필수 build 도구/권한 호환성은 별도 확인이 필요하다. 비교의 변동/효과 정책은 통계적 유의성 보장이 아니다. Phase 5C는 별도 승인된 사용자 Agent/evaluator, 독립 반복·품질 기준, exact diff·승인·budget·rollback부터 시작하고 Phase 5D에서만 후보 실행·판정을 연결한다.

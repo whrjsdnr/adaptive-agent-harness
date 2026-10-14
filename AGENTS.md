@@ -4,7 +4,7 @@
 
 Adaptive Agent Harness Incubation Platform은 **기존 Agent**와 목표 하드웨어를 분석하고, Container Harness를 생성하여 실제 실행·벤치마크 결과로 구성을 개선하는 플랫폼이다. Agent를 새로 생성하는 제품이 아니다.
 
-현재 단계는 공통 계약·정적 분석·Harness 패키징에 더해 Phase 4 Baseline Runner와 Docker 실행 어댑터를 구현하고, WSL2 Linux의 저장소 reference fixture로 실제 Docker 통합 테스트 8개를 통과한 상태다. 이는 사용자 Agent·목표 장비나 전체 MVP 인수를 의미하지 않는다. 자동 최적화 엔진은 아직 없다. 예약 모듈 디렉터리는 구현 완료를 의미하지 않는다. 후속 구현은 [기능 요구사항](docs/PROJECT_SPEC.md), [아키텍처](docs/ARCHITECTURE.md), [개발 계획](docs/DEVELOPMENT_PLAN.md), [완료 기준](docs/ACCEPTANCE_CRITERIA.md)을 따른다.
+현재 단계는 Phase 4 Baseline Runner와 Docker 실행에 더해 Phase 5A~5B 로컬 데이터 파이프라인·Replay·Harness 연결·실측 비교·병목 가설·실험 계획 계약을 구현한 상태다. Simulator 요구사항·Capability와 선택적 Adapter 인터페이스는 Mock 단위 검증만 제공한다. WSL2 reference fixture 검증은 사용자 Agent·목표 장비나 전체 MVP 인수를 의미하지 않는다. 후보 자동 적용·실행과 자동 최적화 엔진은 아직 없다. 예약 모듈 디렉터리는 구현 완료를 의미하지 않는다. 후속 구현은 [기능 요구사항](docs/PROJECT_SPEC.md), [아키텍처](docs/ARCHITECTURE.md), [개발 계획](docs/DEVELOPMENT_PLAN.md), [완료 기준](docs/ACCEPTANCE_CRITERIA.md), [Phase 5 안내](docs/PHASE5_FOUNDATION.md)를 따른다.
 
 ## 반드시 지킬 원칙
 

@@ -2,6 +2,8 @@
 
 구현 범위는 기존 Agent 소스 사본과 생성된 Harness의 통합, Docker CLI 빌드·실행·관측, 반복 실행 및 JSON 저장이다. WSL2 Linux에서 저장소 reference fixture의 실제 Docker 통합 테스트 8개를 통과했다. 이전 소켓 접근 거부 기록은 보존한다. 통합 테스트 fixture는 사용자 Agent의 최종 검증을 대체하지 않는다.
 
+Phase 5A~5B는 이 API를 유지하면서 optional data_requirement/prepared_data와 Baseline의 데이터 버전·검증 연결을 추가했다. 상세 데이터·비교·Simulator 범위는 [Phase 5 안내](PHASE5_FOUNDATION.md)를 따른다. 무데이터 Phase 4 테스트 8개를 그대로 유지한다. 종료 코드 137과 OOM 이벤트의 갱신 시차를 위해 inspect를 최대 1초 재관측하지만, OOMKilled=true를 확인하지 않으면 OOM으로 추정하지 않는다.
+
 ## 승인과 입력
 
 1. 기존 `AgentAnalyzer`, `TargetProfiler`, `CompatibilityEngine`, `HarnessSpecificationGenerator`, `ContainerHarnessBuilder`로 입력 스냅샷과 패키지를 만든다. Agent 원본을 수정하거나 호스트에서 import/실행하지 않는다.
