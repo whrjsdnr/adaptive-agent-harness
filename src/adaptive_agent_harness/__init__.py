@@ -1,1 +1,1 @@
-"""Contracts and static analysis for harness incubation around existing agents."""
+"""Contracts, analysis and container preparation for harnesses around existing agents."""

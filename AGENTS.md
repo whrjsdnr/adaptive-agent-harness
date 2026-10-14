@@ -4,7 +4,7 @@
 
 Adaptive Agent Harness Incubation Platform은 **기존 Agent**와 목표 하드웨어를 분석하고, Container Harness를 생성하여 실제 실행·벤치마크 결과로 구성을 개선하는 플랫폼이다. Agent를 새로 생성하는 제품이 아니다.
 
-현재 단계는 공통 데이터 계약과 정적 Agent 분석·호스트 프로파일링·호환성 판정까지 구현한 상태다. 예약 모듈 디렉터리는 구현 완료를 의미하지 않는다. 실제 Agent 실행과 최적화 엔진은 아직 없다. 후속 구현은 [기능 요구사항](docs/PROJECT_SPEC.md), [아키텍처](docs/ARCHITECTURE.md), [개발 계획](docs/DEVELOPMENT_PLAN.md), [완료 기준](docs/ACCEPTANCE_CRITERIA.md)을 따른다.
+현재 단계는 공통 계약·정적 분석에 더해 Harness Specification 생성과 Container Package 파일 생성을 구현한 상태다. 이미지 빌드·Agent 실행·자동 최적화는 아직 구현하지 않았다. 예약 모듈 디렉터리는 구현 완료를 의미하지 않는다. 실제 Agent 실행과 최적화 엔진은 아직 없다. 후속 구현은 [기능 요구사항](docs/PROJECT_SPEC.md), [아키텍처](docs/ARCHITECTURE.md), [개발 계획](docs/DEVELOPMENT_PLAN.md), [완료 기준](docs/ACCEPTANCE_CRITERIA.md)을 따른다.
 
 ## 반드시 지킬 원칙
 

@@ -2,7 +2,7 @@
 
 ## 1. 목적, 용어, 구현 상태
 
-기존 AI Agent를 실행할 Container Harness를 만들고, 목표 하드웨어 제약과 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 데이터 계약, 정적 Agent Analyzer, 실행 호스트 Target Profiler, Compatibility Engine이다. Harness 생성·Agent 실행·최적화와 전체 MVP 인수는 아직 구현·검증하지 않았다.
+기존 AI Agent를 실행할 Container Harness를 만들고, 목표 하드웨어 제약과 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석과 Harness Specification·Container Package 파일 생성이다. 이미지 빌드·Agent 실행·자동 최적화와 전체 MVP 인수는 아직 구현·검증하지 않았다.
 
 | 용어 | 정의 |
 | --- | --- |
@@ -135,3 +135,17 @@ MVP는 단일 실행 호스트, 로컬 Agent 경로, 명시적인 실행 manifes
 - ACCEPTED는 실측 실행·지표·기능 PASS·실측 품질 저하 없음·비교 기준 참조를 요구한다. 이는 기록의 유효성 검사이며 최적화 성공을 자동 판정하는 엔진이 아니다.
 
 Compatibility Engine은 알려진 요구사항의 정적 비교만 수행한다. FIT도 실제 실행 보장이 아니며, 의존성 설치·wheel/ABI 호환성은 미검증으로 남긴다. 불일치 또는 미확인 정보를 덮어쓰지 않고 `UNSUPPORTED > UNKNOWN > ADAPT_REQUIRED > FIT` 우선순위로 집계한다. 실제 Agent 입력으로 실행 동등성과 성능을 검증하는 전체 MVP 인수는 후속 단계다.
+
+## 7. Phase 3: Container Harness 생성 범위
+
+- HarnessSpecificationGenerator는 Agent/Target/Host/Compatibility와 ContainerHarnessRequest를 입력받는다. 선택적 OperationalRequirements는 기존 최소 조건을 강화하거나 UNKNOWN을 채우며, 확인된 조건을 약화하지 않는다. Python 프로그램을 Docker로 감싸는 명시적 운영 요구는 허용하지만 VM 요구는 차단한다.
+- 명시적인 기반 이미지와 인자 배열을 사용한다. 소스에서 셸 명령을 추출·실행하거나 Agent 유형별 최적화·이미지 선택 정책을 만들지 않는다. 실행 명령이 없으면 미확인 사유와 함께 생성 차단한다.
+- 기존 보고서의 UNSUPPORTED를 차단하고 현재 입력으로 호환성을 재평가한다. 이전 UNKNOWN 근거를 숨기지 않는다. 이미지 아키텍처·Python 런타임이 명백히 충돌하면 차단하며, 추정·미검증 정보는 REVIEW_REQUIRED다.
+- CPU/RAM은 요청 할당과 Target 시뮬레이션 한도를 항목별 병합하고 물리 용량·선언된 한도를 넘지 않도록 한다. 누락값은 임의의 1 CPU·1 GiB 같은 값으로 확정하지 않는다.
+- 비특권 숫자 UID/GID, cap_drop ALL, no-new-privileges, PID 제한을 보안 기본 정책으로 사용한다. read_only는 호환성이 명시적으로 확인된 경우만 설정한다.
+- 네트워크 기본 차단은 Compose network_mode none으로 구성한다. 호스트명/IP allowlist는 선언만 기록하고 외부 강제 수단이 준비되기 전 차단을 유지한다. 구성 파일의 정책과 실제 런타임 강제 검증은 별도다.
+- 파일은 명시적 소스 allowlist와 해시로 복사하며 원본은 수정하지 않는다. 추가 자산의 해시는 분석 파일 지문과 별도로 추적한다. 호스트 bind는 별도 allowlist에 제한하고 Docker 소켓·장치·symlink·원본을 노출하는 writable bind를 차단한다.
+- ContainerHarnessBuilder는 지정된 기존 출력 루트의 새 패키지 디렉터리에만 파일을 쓴다. 기존 출력은 덮어쓰지 않고 실패 시 이번에 작성한 파일만 정리한다. 환경변수 값·자격 증명은 생성하지 않으며 소스·메타데이터의 의심 패턴도 차단한다. 전체 보안 판정 엔진은 구현하지 않는다.
+- Linux x86_64/ARM64의 목표 플랫폼 메타데이터와 미실행 BuildxPlan을 제공한다. 실제 기반 이미지 조회·빌드·교차 실행·ARM64 하드웨어 검증·GPU 디바이스 구성·드라이버/CUDA/TensorRT·바이너리 ABI 검증은 하지 않는다.
+
+출력은 Dockerfile·compose.yaml·harness.yaml·환경 템플릿·안내문·Manifest·선택한 소스의 컨테이너 빌드 컨텍스트다. 미리 빌드된 이미지가 아니며, 현재 image_built와 execution_verified는 항상 false다. STATIC_READY는 정적 입력의 완전성이고 UNKNOWN/ADAPT_REQUIRED 패키지는 실행 검토 전 자료다. 실제 Agent 실행·코드 변경·Optimization Planner·Scheduler·Hardware Emulator는 이번 범위 밖이다.

@@ -2,7 +2,7 @@
 
 ## 1. 설계 수준과 선택
 
-공통 데이터 계약과 `analyzer`의 AgentAnalyzer·TargetProfiler·CompatibilityEngine은 구현했다. Harness·실행·벤치마크 수집·최적화·Scheduler·보안·Porting Lite·승인·저장은 후속 설계안이다. Incubation 데이터는 기록 스키마이며 실행 엔진이 아니다.
+공통 계약·분석과 `harness`의 명세 생성·컨테이너 빌드 컨텍스트 패키징을 구현했다. 실제 이미지 빌드·실행·벤치마크·최적화·Scheduler·보안 실제 연동·Porting Lite 전체 기능·승인·이력 저장은 후속 설계안이다. Incubation 데이터는 기록 스키마이며 실행 엔진이 아니다.
 
 제어부는 Python 3.12 단일 프로세스로 시작한다. Pydantic v2 데이터 계약, 주입 가능한 실행·저장·외부 서비스 어댑터, 로컬 산출물 저장을 사용한다. Docker 실행 백엔드와 도메인 로직을 분리하고, 플랫폼 자체의 웹 서버나 상시 서비스는 우선 만들지 않는다. 후속 CLI는 orchestration을 호출하는 얇은 경계로 설계한다.
 
@@ -33,13 +33,13 @@ flowchart TD
 
 ## 3. 모듈 책임과 제안 인터페이스
 
-아래 표에서 `contracts`와 `analyzer`만 구현된 API다. 나머지 행의 함수는 후속 설계 표기다.
+아래 표에서 contracts·analyzer·harness만 구현된 API다. 나머지 함수는 후속 설계 표기다. 저장소 쓰기는 Builder의 파일 어댑터 경계에 한정하고 명세 생성기는 입력 데이터만 비교한다.
 
 | 모듈 | 책임 | 제안 인터페이스 | 경계 |
 | --- | --- | --- | --- |
 | `contracts` | 버전 있는 입력·출력·상태·오류 모델 | 아래 계약의 Pydantic 모델과 enum | 외부 I/O·최적화 규칙 없음 |
 | `analyzer` | 정적 분석, 로컬 호스트 관측, 목표 호환성 | `AgentAnalyzer.analyze(path, agent_id=None, operational_requirements=None) -> AgentProfile`; `TargetProfiler(probe=None).profile_host() -> HostProfile`; `CompatibilityEngine.assess(agent, target) -> CompatibilityReport` | Agent import·실행·자동 설치 없음 |
-| `harness` | 기준 Harness·후보 구성을 자료로 생성 | `generate(AgentProfile, HarnessSpecification) -> HarnessBundle`; `revise(HarnessBundle, AdaptationCandidate) -> HarnessBundle` | Docker 실행·Agent 코드 수정 없음 |
+| `harness` | 명세 생성·파일 렌더링·출력·무결성 검사 | `HarnessSpecificationGenerator.generate(agent, target, host, compatibility, request, operational_requirements=None) -> ContainerHarnessSpecification`; `ContainerHarnessBuilder.build(spec, agent, target, host, output_root, package_name=None) -> ContainerPackage`; `verify(directory) -> ContainerPackageManifest` | Docker·Agent 실행·원본 수정 없음; 후보 revise는 미구현 |
 | `runtime` | Docker 사전 점검, 빌드·실행·정리 | `preflight() -> RuntimeCapability`; `build(HarnessBundle) -> ImageArtifact`; `execute(RunRequest) -> RunResult`; `cancel(run_id) -> CancelResult` | 추정 결과를 실측으로 반환하지 않음 |
 | `benchmark` | 평가 계획, 결과 집계·비교 가능성·채택 기준 평가 | `evaluate(RunResult, BenchmarkPlan) -> BenchmarkResult`; `compare(baseline, candidate, BenchmarkPlan) -> ComparisonResult` | 컨테이너 직접 실행·유형별 처방 없음 |
 | `optimizer` | 실행 증거로 제한된 후보 제안, 예산·중복 관리 | `propose(ExperimentHistory, Objective, SearchBudget) -> list[AdaptationCandidate]` | 자동 코드 변경·후보 자동 채택 없음 |
@@ -61,7 +61,7 @@ flowchart TD
 | `AgentManifest` | `agent_id`, 원본 경로·revision·SHA-256, `argv`, `working_dir`, 의존성 파일, 입력·출력, 요구 권한, 기능 테스트 `argv` |
 | `AgentProfile` | 원본 참조, 런타임·의존성·진입점·장치 요구, 항목별 근거·신뢰 수준·unknown |
 | `TargetProfile` / `HostProfile` | 목표와 실제 호스트를 분리. PlatformInfo·ResourceCapacity·RuntimeInfo·DeploymentCapabilities 독립 구성; 목표의 RESOURCE_SIMULATION·simulated_limits는 실측 용량과 별도 |
-| `HarnessSpecification` | 구현된 최소 계약: Agent·원본 해시·목표·버전·부모 Harness·실행 방식·argv·이미지 관측·자원 제한·환경 비밀 참조. 파일 생성은 미구현 |
+| `HarnessSpecification` | 구현된 최소 계약: Agent·원본 해시·목표·버전·부모 Harness·실행 방식·argv·이미지 관측·자원 제한·환경 비밀 참조. v1.0 계약 유지; Phase 3의 ContainerHarnessSpecification v1.1이 상속 확장 |
 | `HarnessBundle` | `harness_id`, spec·원본 해시, Dockerfile·manifest·컨텍스트 파일 목록, 산출물 참조·해시 |
 | `RuntimeCapability` | 실제 실행 호스트, Docker CLI·데몬·권한·아키텍처 지원 상태, 차단 원인 |
 | `ImageArtifact` | 이미지 digest, Harness 참조, 빌드 실행 ID·로그·결과 |
@@ -150,7 +150,7 @@ artifacts/<incubation_id>/
 
 ## 11. 현재 구현 API와 범위
 
-`contracts/base.py`는 Contract·Fact·EvidenceKind를, `profiles.py`는 Agent·Host·Target·OperationalRequirements·CompatibilityReport와 독립된 플랫폼·런타임·배포 구성요소를, `incubation.py`는 HarnessSpecification·BenchmarkResult·AdaptationCandidate·IncubationSession을 제공한다. 이후 인터페이스에서는 제안 단계의 HardwareProfile·HarnessSpec·Candidate 대신 위 이름을 사용한다. AgentManifest·HarnessBundle·BenchmarkPlan·PortingPackage 등의 나머지 계약은 아직 제안이다.
+`contracts/base.py`는 Contract·Fact·EvidenceKind를, `profiles.py`는 Agent·Host·Target·OperationalRequirements·CompatibilityReport와 독립된 플랫폼·런타임·배포 구성요소를, `incubation.py`는 HarnessSpecification·BenchmarkResult·AdaptationCandidate·IncubationSession을 제공한다. 이후 인터페이스에서는 제안 단계의 HardwareProfile·HarnessSpec·Candidate 대신 위 이름을 사용한다. Phase 3는 ContainerHarnessSpecification과 ContainerPackageManifest v1.1을 추가했다. AgentManifest·BenchmarkPlan·PortingPackage 등의 나머지 계약은 아직 제안이며 HarnessBundle 역할은 현재 ContainerPackage가 담당한다.
 
 | API | 동작과 한계 |
 | --- | --- |
@@ -166,3 +166,26 @@ Agent 정적 분석은 설정 선언을 탐지할 뿐 실제 진입점 동작·�
 IncubationSession의 iterations는 1부터 연속 번호이며 각 반복은 네 단계의 순서 있는 prefix 또는 완료된 네 단계다. 단계별 payload와 Agent/호스트/목표/원본/파생 버전 참조를 검증한다. 후보의 예상 효과는 ESTIMATED, 실제 검증은 별도 BenchmarkResult다. 품질이 저하되거나 실측이 없는 결과는 ACCEPTED로 기록할 수 없다. 코드 변경 증거는 참조 스키마만 구현했으며 승인·패치 적용·테스트 실행·롤백 실행은 구현하지 않았다.
 
 CompatibilityReport의 FIT는 명시된 정적 요구사항에 대한 판정이며 Agent 실행 성공·보안 허가·성능 보장이 아니다. 다른 알려진 불일치가 있으면 UNSUPPORTED, 그렇지 않고 미확인 항목이 있으면 UNKNOWN, 그다음 조정 가능한 조건이 있으면 ADAPT_REQUIRED다. 실제 호스트 프로파일을 입력 목표에 자동 병합하지 않는다.
+
+## 12. Phase 3 계약·생성·파일 어댑터
+
+`contracts/harness.py`의 ContainerHarnessSpecification은 기존 HarnessSpecification을 상속하며 schema_version 1.1을 사용한다. v1.0 계약·기존 분석 API는 유지한다. 새 JSON은 새 클래스로 읽고, Baseline Runner는 이 명세와 ContainerPackageManifest의 버전을 확인해야 한다. 이 변경은 Harness 모듈의 확장이며 기존 모듈 구조를 바꾸지 않는다.
+
+| 구성요소 | 책임 |
+| --- | --- |
+| ContainerHarnessRequest / BaseImage | 명시적 argv·이미지 참조와 지원 선언·작업 디렉터리·자원·환경 참조·소스 해시·설치 전략·운영 정책 |
+| NetworkPolicy / SecuritySettings / BindMount | 요청 정책과 적용 가능한 설정 구분; non-root·capability·read-only 호환성·호스트 allowlist |
+| HarnessSpecificationGenerator | 파일 I/O 없이 조건 병합·호환성 재검사·UNKNOWN/버전/의미 지문 생성. 필수 명령 누락과 UNSUPPORTED 차단 |
+| ContainerHarnessBuilder | JSON/YAML·Dockerfile 렌더링, 별도 파일 어댑터로 소스 읽기·해시·비밀 검사·출력 경계·exclusive 쓰기·검증 |
+| ContainerPackageManifest / PackageFile | 입력 ID·분석/복사 소스 지문·파일 해시/크기/권한·명세 해시·타깃/호스트/이미지 플랫폼·미검증 상태 |
+| BuildxPlan | 단일/다중 linux/amd64·linux/arm64와 OCI 출력 인자 표현. 명령 실행·이미지 push·에뮬레이터 설정 없음 |
+
+입력 지문은 Agent/Target/Host 의미 데이터와 연결되며 Builder가 명세 생성 후 입력 변경을 차단한다. source_bundle_sha256은 실제로 복사한 파일의 내용·권한 범위를 나타내며 analyzed_files 지문과 구분한다. 원본은 읽기만 하고 복사본의 권한에서 setuid 등 특권 비트를 제거한다.
+
+생성 식별자는 입력 의미 데이터의 해시를 UUID5로 변환하며 created_at은 식별 해시에서 제외한다. 파일 바이트는 원래의 입력 시각도 포함하므로, 완전히 같은 저장된 입력 스냅샷을 재사용할 때 재현된다. 출력 경로 자체는 산출물 내용에 들어가지 않는다. Registry의 mutable tag·의존성 해제·실제 이미지 빌드의 재현성은 별도 문제다.
+
+출력 파일과 manifest는 고정 이름을 사용하고, 소스는 검증된 상대 경로를 `agent/` 아래로 복사한다. 출력 루트는 기존 POSIX 디렉터리이며 child 디렉터리는 새로 생성한다. 경로 검사와 O_NOFOLLOW·O_EXCL·dir_fd로 symlink·기존 파일 쓰기를 차단한다. bind는 패키징 호스트에서 소켓·symlink·존재를 확인하고 실제 실행 호스트에서 다시 확인해야 한다.
+
+환경변수는 이름과 secret:// 또는 env:// locator만 표현하고 외부 공급은 후속 실행 경계 책임이다. 셸·inline Python 입력은 지원하지 않으며 Compose에서 인자의 $는 리터럴로 escape한다. installer는 명시적 전략에서만 고정 exec-form으로 생성한다. 설치 build hook은 나중에 실제 이미지 빌드 시 별도 검토해야 한다.
+
+Compose의 deny 설정과 allowlist 선언을 분리하고 선택적 egress 강제 도구는 구현하지 않는다. rootfs read_only는 호환성 확인값에 따라 적용한다. 이미지·컨테이너·외부 보안 검토는 수행하지 않으므로 모든 패키지는 pending-validation profile과 false 실행 플래그를 가진다. Manifest 체크섬은 서명이 아니며 신뢰된 Manifest와 비교해야 한다. 이후 Runner/Porting Lite가 입력 지문·플랫폼·미확인 항목·검증 결과를 별도 기록할 수 있도록 인터페이스를 유지한다.

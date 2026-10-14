@@ -35,7 +35,11 @@ class Knowledge(StrEnum):
 
 class Contract(BaseModel):
     model_config = ConfigDict(
-        extra="forbid", frozen=True, validate_default=True, allow_inf_nan=False
+        extra="forbid",
+        frozen=True,
+        validate_default=True,
+        allow_inf_nan=False,
+        hide_input_in_errors=True,
     )
 
     schema_version: Literal["1.0"] = "1.0"

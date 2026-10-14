@@ -2,7 +2,7 @@
 
 ## 1. 현재 단계와 MVP 인수의 구분
 
-현재 완료 범위는 독립 개발환경·공통 계약·정적 Agent 분석·실행 호스트 관측·호환성 판정이다. 문서·구조 작성 단계는 이전 기록으로 보존한다. 아래 전체 MVP 기준과 현재 단계 기준을 구별하며, 단위 테스트 통과를 Agent 실행·최적화 완료로 해석하지 않는다.
+현재 완료 범위는 독립 개발환경·공통 계약·정적 분석과 Phase 3 명세·컨테이너 패키지 파일 생성이다. 이미지 빌드·Agent 실행·전체 MVP 인수는 아직 완료하지 않았다. 문서·구조 작성 단계는 이전 기록으로 보존한다. 아래 전체 MVP 기준과 현재 단계 기준을 구별하며, 단위 테스트 통과를 Agent 실행·최적화 완료로 해석하지 않는다.
 
 ## 2. 초기 문서·구조 단계의 완료 기준 (이전 단계)
 
@@ -102,4 +102,23 @@ Python 3.12 프로젝트 환경에서 `ruff check .`, `ruff format --check .`, �
 
 `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv build --offline`로 sdist·wheel을 빌드했다. 소스 배포 파일에 캐시·가상환경·Git 메타데이터·개인 설정·환경 파일이 포함되지 않음을 검사했고, wheel에 구현된 계약·분석 모듈이 포함됨을 확인했다. 패키지 빌드는 컨테이너 Harness 빌드와 별개다. 빌드 시 소스 내부 캐시 경고가 있었으나 실제 sdist 파일 목록에서 제외를 확인했다.
 
-이 결과는 제공된 Agent의 실제 실행·기능 동등성·최적화 성능 검증이 아니다. Docker Harness Builder, Agent 실행·코드 변경, Optimization Planner, Scheduler, Hardware Emulator, 보안 실제 연동, Porting Lite 생성은 미구현이다. 실행을 요구하는 전체 MVP 매트릭스는 여전히 후속 인수 대상이다.
+위 기록은 Phase 2 당시 결과다. 현재 Harness 파일 생성·패키징은 9절에서 검증한다. Agent 실제 실행·코드 변경·Optimization Planner·Scheduler·Hardware Emulator·보안 실제 연동·Porting Lite 전체 기능은 미구현이다. 실행을 요구하는 전체 MVP 매트릭스는 여전히 후속 인수 대상이다.
+
+## 9. Phase 3 완료 기준과 검증 증거
+
+2026-10-14, 프로젝트 전용 Python 3.12.14 환경에서 Docker·외부 명령·네트워크 없이 검증했다. 기존 75개는 유지하고 총 147개 단위 테스트를 통과한다. 이 단계의 인수는 명세·파일 패키징·정적 정책이며 Docker 빌드/실행 인수가 아니다.
+
+| 기준 | 검증 범위 |
+| --- | --- |
+| 명세 생성·스키마·추적 | v1.0 유지·v1.1 상속/JSON, 원본/입력 지문, 부모 버전, 같은 입력의 재현성, 생성기 파일 I/O 없음 |
+| 누락·호환성 | 명령 누락 UNKNOWN 사유, UNKNOWN 기본값 미확정, UNSUPPORTED·오래된 보고서·이미지 아키텍처/런타임 충돌 차단 |
+| 자원 제한 | CPU/RAM 출력, Target 한도 초과 거절, 부분 요청에서도 Target RAM/CPU 제한 유지, 실제 용량과 가상 제한 구분 |
+| 파일 생성 | Dockerfile·Compose·명세·환경 템플릿·안내문·Manifest·소스 해시, 고정 exec-form, 입력 소스 불변 |
+| 보안 | non-root·cap_drop ALL·no-new-privileges, read-only 조건 적용, 네트워크 deny/선언 allowlist, bind allowlist·소켓 차단, 비밀 값/소스 차단 |
+| 출력 경계 | 상대 경로 탈출·symlink·기존 출력 거절, 쓰기 실패 정리·기존 파일 보존, 크기 한도 |
+| 무결성 | 파일 추가/누락·내용·권한·명세/Manifest ID·소스 번들 변경 감지 |
+| ARM64 / Buildx | x86_64 호스트와 ARM64 목표/컨테이너 메타데이터 분리, 다중 플랫폼 인자 표현, 미실행/미빌드 플래그 |
+
+실행 명령은 `.venv/bin/pytest -q`, `.venv/bin/ruff check .`, `.venv/bin/ruff format --check .`, `git diff --check`이며 최종 완료 보고에 결과를 남긴다. 단위 테스트에서는 subprocess 및 외부 socket 연결을 차단한다. 성공한 기존 fixture를 입력으로 실제 파일 예시 `artifacts/phase3-arm64-example/`를 생성하고 `ContainerHarnessBuilder.verify()`로 검증했다.
+
+예시는 실제 AI Agent가 아니며 테스트 코드가 실행되면 의도적으로 예외를 발생시킨다. ARM64 목표는 선언, 패키징 호스트는 실제 x86_64 관측이며 상태는 REVIEW_REQUIRED다. image_built=false, execution_verified=false, security_review=UNVERIFIED다. Docker/Compose CLI의 구문 검증·실제 이미지 빌드·Agent 실행·ARM64 실장비·CUDA/TensorRT·성능/기능 동등성은 미실행으로 남긴다. 패키지는 Git에서 제외하며 이를 전체 MVP 완료로 보고하지 않는다.

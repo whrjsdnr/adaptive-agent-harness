@@ -1,6 +1,22 @@
 """Public data contracts; schema construction has no external side effects."""
 
 from .base import EvidenceKind, Fact, Knowledge, known
+from .harness import (
+    BaseImage,
+    BindMount,
+    BuildxPlan,
+    ContainerHarnessRequest,
+    ContainerHarnessSpecification,
+    ContainerPackageManifest,
+    ContainerPlatform,
+    DependencyInstallation,
+    InstallationMode,
+    NetworkMode,
+    NetworkPolicy,
+    PackageFile,
+    SecuritySettings,
+    StaticReadiness,
+)
 from .incubation import (
     AdaptationCandidate,
     AgentVersion,
@@ -43,6 +59,20 @@ from .profiles import (
 )
 
 __all__ = [
+    "BaseImage",
+    "BindMount",
+    "BuildxPlan",
+    "ContainerHarnessRequest",
+    "ContainerHarnessSpecification",
+    "ContainerPackageManifest",
+    "ContainerPlatform",
+    "DependencyInstallation",
+    "InstallationMode",
+    "NetworkMode",
+    "NetworkPolicy",
+    "PackageFile",
+    "SecuritySettings",
+    "StaticReadiness",
     "AdaptationCandidate",
     "AgentProfile",
     "AgentSource",
