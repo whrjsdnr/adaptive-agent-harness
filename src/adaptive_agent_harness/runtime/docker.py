@@ -115,6 +115,7 @@ class DockerCLI:
         self.command(
             [
                 "build",
+                "--force-rm",
                 "--network",
                 "default" if network else "none",
                 "--platform",

@@ -2,7 +2,7 @@
 
 기존 AI Agent와 목표 하드웨어 프로파일을 분석하여 적합한 Container Harness를 생성하고, 실제 실행과 벤치마크를 반복해 Agent별 최적화 구성을 탐색하는 적응형 부화장 플랫폼이다.
 
-**현재 상태: Phase 5A~5B 데이터 파이프라인과 실측 최적화의 기초 구현.** 승인된 로컬 CSV/JSON/JSONL의 검증·변환·Replay, 읽기 전용 Harness 연결, 기존 BenchmarkResult 비교·병목 가설·실험 계획 계약을 제공한다. Simulator는 선택적 계약·Adapter·Mock 검증에 한정한다. Docker 포함 전체 테스트 289개를 통과했고 기존 Phase 4의 190개를 유지했다. 사용자 Agent·목표 장비와 전체 MVP 인수는 별도다. 후보 자동 적용·실행·자동 최적화·Scheduler·Hardware Emulator·보안 실제 연동·플랫폼 CLI·서버는 없다. [Phase 4 안내](docs/PHASE4_BASELINE.md), [Phase 5 안내](docs/PHASE5_FOUNDATION.md)를 따른다.
+**현재 상태: Phase 5C~5D 승인된 후보 실행·평가·반복 적응과 Porting Manager 경계 구현.** 승인된 로컬 CSV/JSON/JSONL의 검증·변환·Replay, 읽기 전용 Harness 연결, 기존 BenchmarkResult 비교·병목 가설·실험 계획 계약을 제공한다. Simulator는 선택적 계약·Adapter·Mock 검증에 한정한다. 기존 289개를 유지하고 Docker 포함 전체 328개 테스트가 통과했다. 실측·회귀 결과는 완료 기준 13절에 기록한다. 사용자 Agent·목표 장비와 전체 MVP 인수는 별도다. 정확히 승인된 제한 후보만 실행한다. 운영 자동 배포·Agent 소스 수정·Scheduler·Hardware Emulator·보안 실제 연동·플랫폼 CLI·서버는 없다. [Phase 4 안내](docs/PHASE4_BASELINE.md), [Phase 5 안내](docs/PHASE5_FOUNDATION.md)를 따른다.
 
 ## 목표와 범위
 
@@ -20,6 +20,7 @@ Harness를 먼저 개선하고, Agent 코드 변경은 명시적 승인·테스�
 | [DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | 10영업일 계획, 선행 조건과 일별 검증 |
 | [ACCEPTANCE_CRITERIA.md](docs/ACCEPTANCE_CRITERIA.md) | 현재 단계 및 후속 MVP의 완료 기준 |
 | [PHASE5_FOUNDATION.md](docs/PHASE5_FOUNDATION.md) | 로컬 데이터 API·보안·측정·비교·Simulator 경계 |
+| [PHASE5_INCUBATION.md](docs/PHASE5_INCUBATION.md) | 후보 승인·Patch·실제 실행·평가·반복·Porting 경계 |
 
 ## 기본 구조
 
@@ -69,7 +70,7 @@ Harness를 먼저 개선하고, Agent 코드 변경은 명시적 승인·테스�
 | Python | `.venv/bin/python`, 3.12.14 | 다른 프로젝트 가상환경 사용 없음 |
 | Pydantic | 2.14.1 | JSON·경계 검증 테스트 통과 |
 | packaging | 26.3 | PEP 508 의존성·Python 버전 제약 파싱 |
-| pytest | 9.1.1 | Docker 포함 전체 289개 통과; 실패·skip 없음 |
+| pytest | 9.1.1 | Docker 포함 전체 328개 통과; 실패·skip 없음 |
 | Ruff | 0.16.10 | lint·format 검사 통과 |
 | uv | 0.12.8 | 의존성 설치·잠금 관리 |
 | Docker | CLI/Engine 29.1.3, Compose 2.40.3, cgroup v2 | docker 그룹 적용 후 hello-world 및 reference fixture 통합 테스트 8개 통과 |
@@ -121,7 +122,7 @@ Agent Analyzer는 pyproject의 정적 메타데이터·PEP 508 의존성·requir
 
 Compatibility Engine의 `FIT`는 알려진 정적 요구사항의 일치를 뜻한다. 의존성 설치·ABI·실제 Agent 실행·성능은 별도 검증이 필요하다. 판정 우선순위는 `UNSUPPORTED > UNKNOWN > ADAPT_REQUIRED > FIT`이며 각 항목의 근거와 미확인 이유를 반환한다. 의존성이 있으면 설치 가능성은 `UNKNOWN`이다.
 
-Incubation 계약은 실측·추정, 예상 효과·검증 결과, Harness·Data Pipeline·Agent 설정/코드 변경과 반복 단계를 기록한다. Phase 5A~5B는 별도 비교·병목 가설·계획 API를 제공하며 품질 저하·미검증 결과의 채택을 거부한다. 실제 후보 생성/적용·자동 실행/채택·승인 UI·롤백 실행은 수행하지 않는다.
+Incubation 계약은 실측·추정, 예상 효과·검증 결과, Harness·Data Pipeline·Agent 설정/코드 변경과 반복 단계를 기록한다. Phase 5A~5B는 별도 비교·병목 가설·계획 API를 제공하며 품질 저하·미검증 결과의 채택을 거부한다. Phase 5C~5D는 별도 승인 계약으로 제한 후보 생성·실행·실측 평가·반복을 제공한다. 승인 UI·Agent 코드 patch/rollback·운영 자동 배포는 없다. [후보 실행 안내](docs/PHASE5_INCUBATION.md)를 따른다.
 
 ## Phase 3: 명세와 Container Package 생성
 

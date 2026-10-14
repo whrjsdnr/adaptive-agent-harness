@@ -281,3 +281,84 @@ tests/unit/test_simulator.py
 ```
 
 **현재 Phase 5A~5B 완료 기준을 위 검증 범위에서 충족했다.** 실제 사용자 Agent·LLM API E2E, 목표 실장비/ARM64/GPU/Windows/Junction, 실제 Simulator/PX4/Gazebo/ROS 2/AirSim, 외부 API/DB/영상/broker, nested schema, end-to-end consumer 지연, pipeline OS CPU/RAM quota, crash journal/recovery, 후보 적용/반복 실행·Agent patch·coding agent·자동 최적화·Scheduler·에뮬레이션·드론 배포는 미검증 또는 미구현이다. 검증한 이미지 계열은 python:3.12-slim이며 다른 이미지의 필수 build 도구/권한 호환성은 별도 확인이 필요하다. 비교의 변동/효과 정책은 통계적 유의성 보장이 아니다. Phase 5C는 별도 승인된 사용자 Agent/evaluator, 독립 반복·품질 기준, exact diff·승인·budget·rollback부터 시작하고 Phase 5D에서만 후보 실행·판정을 연결한다.
+
+## 13. Phase 5C~5D 검증
+
+기준 `main/origin/main 2ae8f7c`의 깨끗한 worktree에서 시작했다. `git fetch origin` 이후 0/0을 확인했다. 프로젝트 Python 3.12.14, uv 0.12.8, 기존 uv.lock/Pydantic 2.14.1/pytest 9.1.1/Ruff 0.16.10을 재사용하고 새 의존성·시스템 패키지를 설치하지 않았다. Docker Engine 29.1.3/Compose 2.40.3/cgroup v2를 WSL2 Ubuntu에서 기존 docker 그룹의 sg 하위 프로세스로 사용했다. 소켓 권한·사용자 설정·다른 프로젝트를 변경하지 않았다.
+
+변경 전 전체 Docker 회귀는 **289 passed, 139.69초, 실패/skip 0**이었다. 기존 Ruff lint/format(54 files)와 diff check도 통과했다. 기존 Agent/data_reader fixture, data/local.py, SimulatorAdapter, contracts/optimization의 계획 전용 권한, uv.lock, 이전 실험 JSON은 변경하지 않았다.
+
+| 요구사항 | 검증 범위 |
+| --- | --- |
+| 책임 분리 | optimizer의 순수 가설/계획/평가, PortingService/PortingManager의 기존 로컬 준비·패키징·Compatibility·Mock invoke/validate, 주입된 Runner/저장소, 실제 simulator 없음 |
+| 근거·Patch·승인 | 실측 finding/run ID 연결, unknown/외부 근거, exact 계획 해시/승인/unknown 검토, stale 변경, CLI interface 및 numeric bounds, 금지 privilege/network/mount/code 필드, Target 자원 초과/UNKNOWN 차단 |
+| 후보 실행·버전 | 실제 CPU/RAM/timeout/CLI 변경, 새 Harness/parent/source/approval/run ID 연결, 독립 image/container, 동일 Agent·데이터/pipe version, 결과 JSON 보존 |
+| 평가·반복 | 동일 evaluator/환경/Target/수집 방법, warmup 제외, 3회 이상 측정, exact-output 품질 동등성, 기능 실패·변동/부족·조건 불일치, 중복/시간/횟수/개선 없음 예산, 매 반복 재계획과 외부 승인, 목표 조기 종료 |
+| 실패·복귀 | build/create/wait/timeout/remove 실패 주입, 실패 후보 discarded와 이전 최적 후보 유지, 원본 bundle/manifest 재검증, 실제 timeout·OOM/nonzero 기존 Docker 회귀, 컨테이너/tag 정리 |
+| 데이터 변경 | 별도 DataApproval과 exact 파생 buffer 명세, PortingManager.prepare_data, 부모 version/output hash 보존; pipeline version 차이는 INVALID로 개선 채택 금지 |
+| 저장·보안 | 원자적 비덮어쓰기/partial write 실패, UUID JSON 재해석, 저장 경로 symlink/inode 교체 거절, verify 후 spec 교체 해시 재검증, 새 plan/approval credential sentinel 차단 |
+| 원본·이전 기록 | source/data byte 불변, 이전 public API/false-only 계획 계약 회귀, 이전 결과·immutable baseline package 변경 없음; 운영 자동 배포/source patch 없음 |
+
+명령과 최종 결과는 아래에 확정한다. 단위 fake/synthetic timings과 Mock SIMULATED는 실제 성능 증거가 아니다. 실제 fixture만 Docker로 실행하며 사용자 Agent/LLM API E2E는 실행하지 않았다.
+
+최종 명령과 결과:
+
+| 명령 | 결과 |
+| --- | --- |
+| `env -u VIRTUAL_ENV UV_CACHE_DIR=.cache/uv uv sync --locked --offline` | 13 resolved/12 checked, exit0, 기존 lock 유지 |
+| `sg docker -c '.venv/bin/pytest --run-docker -q --basetemp=/tmp/aah-p5cd-stable-20261014 --junitxml=artifacts/phase5cd-validation-20261014/stable.xml --tb=short'` | **328 passed, 540.69초, 실패/skip/xfail0, exit0** |
+| `.venv/bin/ruff check .` | PASS, exit0 |
+| `.venv/bin/ruff format --check .` | 64 files already formatted, exit0 |
+| `git diff --check` | PASS, exit0 |
+| 별도 Python 프로세스의 결과/패키지 복원 | 실제 결과46개/후보7개/보고서2개/검증 패키지2개 Pydantic·SHA·manifest·0700/0600 검증 PASS |
+| 기존 결과 재해석 및 보존 | Phase4/5 JSON26개 PASS, 기존 accepted-manifest SHA 변경 없음 |
+| `docker ps -a`, 전용 `adaptive-baseline:*` image 조회 | 최종 출력 없음, Agent 및 build intermediate container/tag 잔여0 |
+
+기존275 단위+14 Docker=289개를 유지하고 새 단위37+Docker2개를 추가해 **312 단위+16 Docker=328개**를 통과했다. Docker 옵션 없는 기본 실행에서 통합16개 skip은 실제 통과 증거가 아니다.
+
+최종 fixture 실측(초, warmup 제외3회 median):
+
+| 변경 | Baseline | 후보 | 판정 |
+| --- | --- | --- | --- |
+| CPU1→2 | 6.212260 | 6.219741 | REGRESSED/최소 개선 미달로 거절 |
+| RAM512MiB→1GiB | 6.212260 | 6.206600 | REGRESSED/최소 개선 미달로 거절 |
+| Timeout10→0.1초 | 6.212260 | 1.181660 | 실제 TIMEOUT·기능 실패로 거절; 성능 개선으로 취급하지 않음 |
+| --mode0→1 | 6.212260 | 6.245750 | exit0이지만 wrong-output 기능 FAIL로 거절 |
+| --delay6→2초 | 6.212260 | 2.214799 | IMPROVED, exact-output 품질 유지, CV0.001458 |
+| adaptive mode 실패 후 delay 재계획 | 6.212260 | 2.233068 | IMPROVED, CV0.009467, 목표3초 달성 후 GOAL_REACHED |
+
+CPU/RAM quota는 Docker inspect와 기존 cgroup 테스트에서 검증했다. sampled resource telemetry를 보존하며 짧은 실행의 미수집 CPU/RAM과 kernel lifetime peak는 null/UNKNOWN이다. 공급 metrics는 동일 preparation의 사전 측정으로 별도 유지하고 end-to-end consumer latency로 해석하지 않는다.
+
+최종 artifact manifest SHA-256은 `d8e2e451f01ac5cdf9669566a0c49f1794d811936f8bd8e870b5d1f7bdc9d704`다. 검증된 package copies는 `packages/4f0aa370-2830-4140-b52b-ad296f919fa3`와 `packages/e988acbf-b5d6-4d25-b160-99c7a359d650`이며 Agent source SHA는 `83bdc217a88fceae34c63583c5304f8f2535166d54d76175aa5d01cee8fa67f6`이다. 원래 immutable 보고서의 test path는 수정하지 않고 manifest에서 persistent copy와 hash를 연결한다. Source/data·앞선 실패/관측 기록은 덮어쓰지 않았다. 이 검증은 repository fixture의 대기 설정 실험이며 사용자 Agent의 성능 개선을 증명하지 않는다.
+
+새 실제 통합은 `test_docker_incubation.py`의 후보/적응 루프와 build 취소 2개 시나리오다. Baseline warmup 1+측정 3회, CPU 1→2, RAM 512MiB→1GiB, timeout 10→0.1초, numeric --mode 0→1(품질 실패), --delay 6→2초의 **후보 5개/20회** 및 측정 기반 adaptive loop의 **추가 후보 2개/6회**를 검사한다. 후보 총7개, Agent 실행 총30회이며 기존 데이터 version을 유지한다. Harness 자원 확대의 인과적 개선을 주장하지 않는다. 명시적 delay knob는 fixture의 알려진 대기만 줄이고 출력 동등성을 검사하는 실험 입력이다.
+
+후보 파일/출력은 Git 제외 private `artifacts/phase5cd-validation-20261014/`에 보존한다. 최종 manifest는 원래 테스트 경로와 각 실제 결과의 ID·SHA-256, 최종 검증 package 참조를 연결한다. 중간 전체 회귀는 324 passed였고, 보강 후 327개 실행에서 326 passed/1 failed가 있었다. 원인은 timeout 후보의 네 번째 Docker build가 fixture의 30초 제한을 초과한 것이다. Agent 미실행을 UNVERIFIED/INVALID로 기록한 것은 올바른 판정이었다. --force-rm으로 legacy build 실패/취소의 intermediate container 정리를 보강하고 fixture의 build timeout 60초·후보 budget 180초·초기 캠페인 900초로 단계별 예산을 분리했다. 실제 build 취소/중간 컨테이너 제거는 별도 테스트에서 1 passed/5.51초였다. 최초 실패의 stopped build container 한 개는 exact 후보 Harness ID 소유권을 확인한 뒤 정리했다. 기존 결과/다른 컨테이너는 삭제하지 않았다. 다음 전체 회귀는 327 passed/1 failed였고 짧은 --delay 후보의 실제 변동계수 17.2% 때문에 INCONCLUSIVE였다. wall-clock 0.815269/0.833952/1.096856초를 관측했고 엔진은 개선을 확정하지 않았다. fixture의 승인된 설정을 baseline wait 6초/후보 2초/목표3초로 조정해 Docker 시작 지연의 상대 영향을 낮췄다. 비교의 최소3회·CV<=0.1·효과/변동·품질 기준은 완화하지 않았다. 두 중간 실패는 신규 시나리오의 테스트 설정 문제이며 변경 전 기존289개는 통과했다. 원시 결과와 실패 XML은 보존한다. 실패한 package를 포함한 감사 자료를 자동 삭제하지 않는다. Runtime이 만든 전용 container/tag만 정리한다. 과거 Phase 4/5A~5B artifact는 덮어쓰지 않았다.
+
+변경 파일:
+
+```text
+AGENTS.md
+README.md
+docs/PROJECT_SPEC.md
+docs/ARCHITECTURE.md
+docs/DEVELOPMENT_PLAN.md
+docs/ACCEPTANCE_CRITERIA.md
+docs/PHASE5_FOUNDATION.md
+docs/PHASE5_INCUBATION.md
+src/adaptive_agent_harness/contracts/adaptation.py
+src/adaptive_agent_harness/optimizer/planner.py
+src/adaptive_agent_harness/optimizer/evaluator.py
+src/adaptive_agent_harness/orchestration/baseline.py
+src/adaptive_agent_harness/orchestration/incubation.py
+src/adaptive_agent_harness/runtime/docker.py
+src/adaptive_agent_harness/porting/manager.py
+src/adaptive_agent_harness/storage/experiments.py
+tests/fixtures/configurable_reader/app.py
+tests/unit/test_adaptation.py
+tests/integration/test_docker_incubation.py
+```
+
+현재 제한은 concurrency=1, 최대20후보/100실행/86400초이며 안전한 정리의 bounded command 시간 때문에 총 경과 시간은 budget을 초과할 수 있다. Data Pipeline 설정 후보는 별도 exact 데이터 승인을 요구하고 version 불일치 비교는 INVALID다. 외부 secret bindings를 가진 Agent의 incubation 비교, 범용 기능 품질 evaluator, SIGKILL journal/자동 resume, 여러 프로세스 간 Scheduler는 미지원이다. Agent-internal diagnostic backend가 없으므로 자동 코드 수정 필요성 확정은 하지 않고 NEEDS_INVESTIGATION을 반환한다. 계약의 AGENT_MODIFICATION_REQUIRED는 독립 진단·실패/실측·예상 scope·사용자 승인 필요성을 요구한다.
+
+사용자 Agent·실제 LLM/SDK·목표 실장비·ARM64/GPU/Windows native/Junction, PX4/Gazebo/ROS 2/AirSim/실제 드론/하드웨어 에뮬레이션, Coding Agent/source patch, 운영 자동 배포와 복잡한 Scheduler는 미구현 또는 미실행이다. Fixture 실측·Mock·정적 호환성은 이를 대체하지 않는다. 이후 단계는 승인된 사용자 Agent의 별도 기능 품질 evaluator와 환경 지문, external binding 안전 비교, 독립 pipeline 반복/비교 정책, SIGKILL 이력/취소 경계, 실제 Simulator backend 요구사항을 먼저 확정한다. API와 예산·보존 경계는 [후보 실행 안내](PHASE5_INCUBATION.md)를 따른다.

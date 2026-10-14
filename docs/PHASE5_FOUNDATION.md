@@ -1,6 +1,8 @@
 # Phase 5A~5B — 데이터 파이프라인과 실측 최적화의 기초
 
-이번 범위는 정적 데이터 요구사항 분석, 승인된 로컬 CSV/JSON/JSONL 검증·공급·Replay, 기존 Baseline Runner 연결, 측정 비교·병목 가설과 실험 계획 계약이다. 후보 변경 적용·후보별 Docker 반복 실행·Agent 코드 변경·자동 최적화·Scheduler·외부 Connector·하드웨어 에뮬레이션은 구현하지 않는다. 시뮬레이터는 계약과 선택적 Adapter 인터페이스, Mock 단위 테스트만 제공한다.
+이 문서는 Phase 5A~5B 당시의 범위와 호환 API를 보존한다. 현재 Phase 5C~5D 실행 API는 [후보 실행 안내](PHASE5_INCUBATION.md)를 따른다.
+
+당시 범위는 정적 데이터 요구사항 분석, 승인된 로컬 CSV/JSON/JSONL 검증·공급·Replay, 기존 Baseline Runner 연결, 측정 비교·병목 가설과 실험 계획 계약이다. 후보 변경 적용·후보별 Docker 반복 실행·Agent 코드 변경·자동 최적화·Scheduler·외부 Connector·하드웨어 에뮬레이션은 구현하지 않는다. 시뮬레이터는 계약과 선택적 Adapter 인터페이스, Mock 단위 테스트만 제공한다.
 
 ## 계약과 정적 분석
 
@@ -80,7 +82,7 @@ BaselineResult에 선택적 data_pipeline을 저장하고 ExperimentConditions�
 
 ## Simulator 책임 경계
 
-Incubation Engine은 SimulatorRequirement·센서/상태·제어 계약을 분석하고 입력/실행의 기능·성능 증거를 평가한다. 시뮬레이터를 직접 선택·연결·설정하지 않는다. Porting Manager가 Adapter 생성/선택, 연결·환경 설정/검증, 센서·상태 파이프라인, 명령/프로토콜 매핑과 timeout/error 처리를 담당한다. 현재는 이 책임 경계만 구현·문서화하며 Porting Manager의 실제 연결 관리자는 없다.
+Incubation Engine은 SimulatorRequirement·센서/상태·제어 계약을 분석하고 입력/실행의 기능·성능 증거를 평가한다. 시뮬레이터를 직접 선택·연결·설정하지 않는다. Porting Manager가 Adapter 생성/선택, 연결·환경 설정/검증, 센서·상태 파이프라인, 명령/프로토콜 매핑과 timeout/error 처리를 담당한다. Phase 5A~5B 당시에는 이 책임 경계만 있었다. Phase 5C~5D는 PortingManager의 로컬 prepare_data/materialize 및 주입된 Mock Adapter invoke/validate 인터페이스를 추가했다. 실제 Simulator backend는 여전히 없다.
 
 SimulatorRequirement/Capability는 동작별 Fact 지원 여부와 sensor/state/action schema를 표현한다. `porting.simulator.SimulatorAdapter`는 connect, disconnect, reset, step, observe, send_action, get_status와 공통 invoke를 제공한다. 모든 기능 구현을 요구하는 추상 클래스가 아니며 미지원은 UNSUPPORTED, 미확인은 UNKNOWN이다. 선언만 있고 backend가 없으면 성공으로 반환하지 않는다. Mock 응답은 SIMULATED이며 실측 최적화 증거로 쓰지 않는다. PX4 SITL·Gazebo·ROS 2·AirSim·실제 하드웨어·에뮬레이션은 구현/실행하지 않았다.
 

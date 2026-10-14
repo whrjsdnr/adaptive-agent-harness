@@ -2,7 +2,7 @@
 
 ## 1. 설계 수준과 선택
 
-공통 계약·분석·Harness 패키징과 Phase 4 실행, Phase 5A~5B 데이터 파이프라인·비교·병목 가설·실험 계획을 구현했다. Simulator는 요구사항·Capability·선택적 Adapter·Mock에 한정한다. 후보 적용/실행·사용자 Agent·목표 장비·자동 최적화·Scheduler·보안 실제 연동·Porting Lite 전체 기능·Agent 코드 변경 승인은 후속 범위다. Incubation 데이터는 기록 스키마이며 자동 최적화 엔진이 아니다.
+공통 계약·분석·Harness 패키징과 Phase 4 실행, Phase 5A~5B 데이터 파이프라인·비교·병목 가설·실험 계획을 구현했다. Simulator는 요구사항·Capability·선택적 Adapter·Mock에 한정한다. Phase 5C~5D는 exact 승인된 구조화 Patch·실제 후보 실행·평가·제한 반복과 명시적 Porting Manager를 구현했다. 사용자 Agent·목표 장비·Scheduler·보안 실제 연동·Porting Lite 전체 기능·Agent 코드 변경 승인은 후속 범위다. 과거 IncubationSession 기록 계약과 신규 실행 계약을 별도로 유지한다.
 
 제어부는 Python 3.12 단일 프로세스로 시작한다. Pydantic v2 데이터 계약, 주입 가능한 실행·저장·외부 서비스 어댑터, 로컬 산출물 저장을 사용한다. Docker 실행 백엔드와 도메인 로직을 분리하고, 플랫폼 자체의 웹 서버나 상시 서비스는 우선 만들지 않는다. 후속 CLI는 orchestration을 호출하는 얇은 경계로 설계한다.
 
@@ -33,16 +33,16 @@ flowchart TD
 
 ## 3. 모듈 책임과 제안 인터페이스
 
-아래 표는 전체 MVP 인터페이스 제안이다. contracts·analyzer·harness와 아래 13~15절의 Phase 4/5 API가 구현되었다. 나머지 함수는 후속 설계 표기다. 파일 쓰기는 Builder·LocalFilePipeline·JsonResultStore 어댑터에서 수행하며 명세 생성과 benchmark 판단은 외부 I/O를 하지 않는다.
+아래 표는 전체 MVP 인터페이스 제안이다. contracts·analyzer·harness와 아래 13~16절의 Phase 4/5 API가 구현되었다. 나머지 함수는 후속 설계 표기다. 파일 쓰기는 Builder·LocalFilePipeline·JsonResultStore·JsonExperimentStore 어댑터에서 수행하며 명세 생성과 benchmark 판단은 외부 I/O를 하지 않는다.
 
 | 모듈 | 책임 | 제안 인터페이스 | 경계 |
 | --- | --- | --- | --- |
 | `contracts` | 버전 있는 입력·출력·상태·오류 모델 | 아래 계약의 Pydantic 모델과 enum | 외부 I/O·최적화 규칙 없음 |
 | `analyzer` | 정적 분석, 로컬 호스트 관측, 목표 호환성 | `AgentAnalyzer.analyze(path, agent_id=None, operational_requirements=None) -> AgentProfile`; `TargetProfiler(probe=None).profile_host() -> HostProfile`; `CompatibilityEngine.assess(agent, target) -> CompatibilityReport` | Agent import·실행·자동 설치 없음 |
-| `harness` | 명세 생성·파일 렌더링·출력·무결성 검사 | `HarnessSpecificationGenerator.generate(agent, target, host, compatibility, request, operational_requirements=None) -> ContainerHarnessSpecification`; `ContainerHarnessBuilder.build(spec, agent, target, host, output_root, package_name=None) -> ContainerPackage`; `verify(directory) -> ContainerPackageManifest` | Docker·Agent 실행·원본 수정 없음; 후보 revise는 미구현 |
+| `harness` | 명세 생성·파일 렌더링·출력·무결성 검사 | `HarnessSpecificationGenerator.generate(agent, target, host, compatibility, request, operational_requirements=None) -> ContainerHarnessSpecification`; `ContainerHarnessBuilder.build(spec, agent, target, host, output_root, package_name=None) -> ContainerPackage`; `verify(directory) -> ContainerPackageManifest` | Docker·Agent 실행·원본 수정 없음; Porting Manager가 새 후보 spec/package를 구성 |
 | `runtime` | Docker 사전 점검, 빌드·실행·정리 | `preflight() -> RuntimeCapability`; `build(HarnessBundle) -> ImageArtifact`; `execute(RunRequest) -> RunResult`; `cancel(run_id) -> CancelResult` | 추정 결과를 실측으로 반환하지 않음 |
 | `benchmark` | 평가 계획, 결과 집계·비교 가능성·채택 기준 평가 | `evaluate(RunResult, BenchmarkPlan) -> BenchmarkResult`; `compare(baseline, candidate, BenchmarkPlan) -> ComparisonResult` | 컨테이너 직접 실행·유형별 처방 없음 |
-| `optimizer` | 실행 증거로 제한된 후보 제안, 예산·중복 관리 | `propose(ExperimentHistory, Objective, SearchBudget) -> list[AdaptationCandidate]` | 자동 코드 변경·후보 자동 채택 없음 |
+| `optimizer` | 실행 증거로 제한된 후보 제안, 예산·중복 관리 | `HypothesisGenerator.generate`; `CandidatePlanner.plan`; `ExperimentEvaluator.compare` | 유형별 처방·임의 코드 실행 없음; 정확히 승인된 후보만 평가 |
 | `scheduler` | 단일 호스트 FIFO·예약·동시성·상태·취소 | `submit(JobSpec) -> JobRef`; `status(job_id) -> JobStatus`; `cancel(job_id) -> CancelResult` | 분산·선점·학습 정책 없음 |
 | `security` | 별도 보안 하부 Agent 요청·응답 어댑터 | `review(SecurityReviewRequest) -> SecurityReviewResult` | 판정 엔진 개발 제외 |
 | `porting` | 목표 호환성 평가와 이식 패키지 생성 | `assess(AgentProfile, HarnessBundle, TargetProfile) -> CompatibilityReport`; `package(PortingRequest) -> PortingPackage` | 에뮬레이션·VM·장비 배포 없음 |
@@ -68,8 +68,8 @@ flowchart TD
 | `RunRequest` | 이미지·Harness·입력·목표와 호스트 참조, 제한·seed·벤치마크·보안 검토 참조 |
 | `RunResult` | `run_id`, 실제 호스트·이미지 digest, 시각, 종료 상태·exit code·timeout·OOM, 로그·원시 지표·오류·정리 결과 |
 | `BenchmarkPlan` | 데이터·평가 해시, 워밍업·반복·seed, 지표·단위·집계법·목표 방향, 최소 개선·품질 한도·변동 판정 규칙 |
-| `BenchmarkResult` | 실행별 Agent/Harness/Host/Target·실험 조건·지표·기능 검증 계약. Phase 4/5 실행별 생성과 Phase 5A~5B 반복 통계·비교를 제공하며 자동 최적화는 미구현 |
-| `AdaptationCandidate` | HARNESS/DATA_PIPELINE/AGENT_CONFIGURATION/AGENT_CODE, 기준 Agent 버전·부모/결과 Harness·변경 필드/해시·이유·근거 실행·예상 효과·실제 검증·결정·코드 변경 증거. 실제 후보 생성·적용/실행은 미구현 |
+| `BenchmarkResult` | 실행별 Agent/Harness/Host/Target·실험 조건·지표·기능 검증 계약. Phase 4/5 실행별 생성과 Phase 5A~5B 반복 통계·비교와 Phase 5C~5D 제한 반복을 제공하며 운영 자동 배포 없음 |
+| `AdaptationCandidate` | HARNESS/DATA_PIPELINE/AGENT_CONFIGURATION/AGENT_CODE, 기준 Agent 버전·부모/결과 Harness·변경 필드/해시·이유·근거 실행·예상 효과·실제 검증·결정·코드 변경 증거. Phase 5C~5D exact Patch/승인으로 제한 후보 생성·실행·평가 |
 | `ComparisonResult` | 기준·후보 참조, 비교 가능성·개선·품질 판정, `accepted/rejected/inconclusive`, 근거 |
 | `SearchBudget` | 최대 후보 수·총 시간·예약 자원·개선 없음 횟수, 소비 기록과 종료 이유 |
 | `IncubationReport` | 입력·기준·모든 후보·최종 결정 참조, 예산·종료 원인·미검증 항목 |
@@ -218,3 +218,9 @@ Package의 false 실행 플래그는 정적 산출물의 상태이며 실제 실
 SimulatorRequirement/Capability/Response는 순수 계약이며 선택적 capability별 지원/미지원/UNKNOWN과 증거 종류를 보존한다. Incubation Engine은 요구사항·실행 결과를 분석/평가하고 Porting Manager에 계약을 전달한다. Porting Manager의 simulator Adapter 경계가 선택·연결·환경 설정/검증·센서/상태 파이프라인·명령 변환·연결 상태/timeout/error를 맡는다. Incubation Engine에서 simulator I/O를 호출하지 않는다.
 
 현재 porting/simulator.SimulatorAdapter는 공통 invoke와 optional 동작 wrappers만 제공한다. 실제 backend가 없으면 성공을 꾸미지 않는다. Mock은 테스트에만 있으며 응답은 SIMULATED다. 실제 Porting Manager의 연결 관리자, PX4/Gazebo/ROS 2/AirSim backend, 하드웨어 에뮬레이션은 구현하지 않는다. 시뮬레이터 상태·센서 dataset과 실제 장비 실측을 혼동하지 않는다.
+
+## 16. Phase 5C~5D Incubation / Porting 경계
+
+IncubationEngine.run/adapt는 Baseline→Diagnose→Hypothesis→Plan→Execute→Measure→Evaluate→Select를 제한 예산으로 조정한다. CandidateExecutor는 기존 BaselineRunner/runtime/storage를 재사용하며 PortingService에 새 package를 요청한다. PortingManager가 기존 LocalFilePipeline 연결·버전 준비·CompatibilityEngine·Harness packaging과 optional SimulatorAdapter/Mock 검증을 담당한다.
+
+과거 계획 전용 계약은 false 권한 그대로 유지하고 contracts/adaptation의 exact 승인·Patch·결과·보고서를 추가한다. source/network/privilege/mount 정책과 원래 package는 변경하지 않는다. 성공 후보는 새 immutable package와 ACCEPTED AdaptationCandidate/품질 증거로 연결하며 자동 운영 배포하지 않는다. pipeline version 불일치는 INVALID, 측정/품질 부족은 INCONCLUSIVE다. 실제 API·예산·rollback reference·한계는 [Phase 5C~5D 안내](PHASE5_INCUBATION.md)를 따른다.

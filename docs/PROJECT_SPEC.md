@@ -2,7 +2,7 @@
 
 ## 1. 목적, 용어, 구현 상태
 
-기존 AI Agent를 실행할 Container Harness를 만들고 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석·Harness 패키징, Phase 4 Docker Baseline Runner 및 Phase 5A~5B 데이터 파이프라인·실측 비교·병목 가설·계획 계약이다. Simulator는 계약·선택적 Adapter·Mock에 한정한다. 사용자 Agent·목표 장비 검증, 후보 자동 적용/실행, 자동 최적화와 전체 MVP 인수는 미완료다.
+기존 AI Agent를 실행할 Container Harness를 만들고 실측 결과에 따라 개선하는 플랫폼을 개발한다. 이 문서는 전체 MVP 요구사항이다. 현재 구현 범위는 공통 계약·분석·Harness 패키징, Phase 4 Docker Baseline Runner 및 Phase 5A~5B 데이터 파이프라인·실측 비교·병목 가설·계획 계약이다. Simulator는 계약·선택적 Adapter·Mock에 한정한다. Phase 5C~5D는 승인된 구조화 설정 Patch·실제 후보 실행·품질/성능 비교·제한 반복과 Porting Manager 경계를 구현했다. 사용자 Agent·목표 장비 검증, 운영 배포와 전체 MVP 인수는 미완료다. 현재 API/제한은 [후보 실행 안내](PHASE5_INCUBATION.md)를 따른다.
 
 | 용어 | 정의 |
 | --- | --- |

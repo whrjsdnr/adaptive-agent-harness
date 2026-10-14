@@ -26,7 +26,7 @@ from adaptive_agent_harness.contracts.runtime import (
     RuntimeRecord,
 )
 from adaptive_agent_harness.harness import ContainerHarnessBuilder
-from adaptive_agent_harness.harness._utils import content_hash
+from adaptive_agent_harness.harness._utils import content_hash, read_regular
 from adaptive_agent_harness.runtime.docker import CommandResult, RuntimeFailure
 
 
@@ -71,7 +71,8 @@ def integrate(
     bindings: dict[str, str],
 ) -> tuple[ContainerHarnessSpecification, str, dict[str, str]]:
     manifest = ContainerHarnessBuilder().verify(root)
-    manifest_hash = hashlib.sha256((root / "manifest.json").read_bytes()).hexdigest()
+    raw_manifest, _ = read_regular(root, "manifest.json", 16 * 1024**2)
+    manifest_hash = hashlib.sha256(raw_manifest).hexdigest()
     if (
         approval.manifest_sha256 != manifest_hash
         or approval.specification_sha256 != manifest.specification_sha256
@@ -79,7 +80,10 @@ def integrate(
         or approval.agent_source_sha256 != manifest.agent_source_sha256
     ):
         raise RuntimeFailure("APPROVAL_MISMATCH", "Approval does not cover this package version")
-    spec = ContainerHarnessSpecification.model_validate_json((root / "harness.yaml").read_bytes())
+    raw_spec, _ = read_regular(root, "harness.yaml", 16 * 1024**2)
+    if hashlib.sha256(raw_spec).hexdigest() != manifest.specification_sha256:
+        raise RuntimeFailure("SPECIFICATION_CHANGED", "Package changed after verification")
+    spec = ContainerHarnessSpecification.model_validate_json(raw_spec)
     for name, profile in (("agent", agent), ("host", host), ("target", target)):
         if spec.input_fingerprints[name] != content_hash(profile.model_dump(mode="json")):
             raise RuntimeFailure(
@@ -154,9 +158,13 @@ class BaselineRunner:
         target: TargetProfile,
         plan: BaselinePlan,
         bindings: dict[str, str] | None = None,
+        max_total_seconds: float | None = None,
     ) -> tuple[BaselineResult, ...]:
         approval = ExecutionApproval.model_validate_json(approval.model_dump_json())
         plan = BaselinePlan.model_validate_json(plan.model_dump_json())
+        if max_total_seconds is not None and not 0 < max_total_seconds <= 86400:
+            raise ValueError("Run budget must be positive and at most one day")
+        deadline = time.monotonic() + max_total_seconds if max_total_seconds is not None else None
         # Freeze the approved context before build; never run a mutable caller directory.
         with tempfile.TemporaryDirectory(prefix="harness-baseline-") as temporary:
             root = Path(temporary) / "package"
@@ -172,7 +180,9 @@ class BaselineRunner:
                 )
             results = []
             for index in range(plan.warmups + plan.repetitions):
-                record = self._execute(root, spec, approval, plan, environment)
+                if deadline is not None and time.monotonic() >= deadline:
+                    break
+                record = self._execute(root, spec, approval, plan, environment, deadline)
                 warmup = index < plan.warmups
                 benchmark = evaluate(
                     record,
@@ -205,6 +215,7 @@ class BaselineRunner:
         approval: ExecutionApproval,
         plan: BaselinePlan,
         environment: dict[str, str],
+        experiment_deadline: float | None = None,
     ) -> RuntimeRecord:
         run_id = uuid4()
         name, tag = f"aah-{run_id}", f"adaptive-baseline:{run_id}"
@@ -266,9 +277,16 @@ class BaselineRunner:
                 if key in info and isinstance(info[key], (str, int))
             }
             build_attempted = True
+            build_timeout = plan.build_timeout_seconds
+            if experiment_deadline is not None:
+                build_timeout = min(build_timeout, experiment_deadline - time.monotonic())
+                if build_timeout <= 0:
+                    raise RuntimeFailure("EXPERIMENT_BUDGET_EXHAUSTED", "No time remains for build")
             data["image_id"] = self.runtime.build(
-                root, tag, spec, plan.build_timeout_seconds, approval.allow_build_network
+                root, tag, spec, build_timeout, approval.allow_build_network
             )
+            if experiment_deadline is not None and time.monotonic() >= experiment_deadline:
+                raise RuntimeFailure("EXPERIMENT_BUDGET_EXHAUSTED", "No time remains for execution")
             create_attempted = True
             data["container_id"] = self.runtime.create(name, data["image_id"], spec, environment)
             self.runtime.verify_policy(name, spec)
@@ -276,8 +294,13 @@ class BaselineRunner:
                 True, "Docker inspect before start", EvidenceKind.MEASURED
             )
             start_attempted = True
-            deadline = time.monotonic() + plan.timeout_seconds
-            self.runtime.start(name, plan.timeout_seconds, plan.log_limit_bytes)
+            timeout = plan.timeout_seconds
+            if experiment_deadline is not None:
+                timeout = min(timeout, experiment_deadline - time.monotonic())
+                if timeout <= 0:
+                    raise RuntimeFailure("EXPERIMENT_BUDGET_EXHAUSTED", "No time remains for start")
+            deadline = time.monotonic() + timeout
+            self.runtime.start(name, timeout, plan.log_limit_bytes)
             started = True
             data["execution_started"] = True
             worker = Thread(target=sample)
